@@ -218,33 +218,33 @@ public struct ContentView: View {
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button(action: { showTOC.toggle() }) {
-                    Image(systemName: "list.bullet.indent")
+                    Label("Contents", systemImage: "list.bullet.indent")
                 }
                 .help("Toggle Table of Contents")
             }
             if isGitRepo {
                 ToolbarItem(placement: .automatic) {
                     Button(action: toggleDiff) {
-                        Image(systemName: showDiff ? "doc.text" : "arrow.left.arrow.right")
+                        Label(showDiff ? "Hide Diff" : "Git Diff", systemImage: showDiff ? "doc.text" : "arrow.left.arrow.right")
                     }
                     .help(showDiff ? "Hide Git Diff" : "Show Git Diff")
                 }
             }
             ToolbarItem(placement: .automatic) {
                 Button(action: copySource) {
-                    Image(systemName: "doc.on.doc")
+                    Label("Copy MD", systemImage: "doc.on.doc")
                 }
                 .help("Copy Markdown Source (Cmd+Shift+C)")
             }
             ToolbarItem(placement: .automatic) {
                 Button(action: copyRendered) {
-                    Image(systemName: "doc.richtext")
+                    Label("Copy HTML", systemImage: "doc.richtext")
                 }
                 .help("Copy HTML (Cmd+Option+C)")
             }
             ToolbarItem(placement: .automatic) {
                 Button(action: exportHTML) {
-                    Image(systemName: "square.and.arrow.up")
+                    Label("Export HTML", systemImage: "square.and.arrow.up")
                 }
                 .help("Export HTML (Cmd+E)")
             }
