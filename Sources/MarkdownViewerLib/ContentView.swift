@@ -174,6 +174,8 @@ public struct ContentView: View {
                 Divider()
             }
             VStack(spacing: 0) {
+                actionBar
+                Divider()
                 if showSearch {
                     searchBar
                     Divider()
@@ -213,40 +215,6 @@ public struct ContentView: View {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
                     .padding(12)
                     .transition(.opacity)
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                Button(action: { showTOC.toggle() }) {
-                    Label("Contents", systemImage: "list.bullet.indent")
-                }
-                .help("Toggle Table of Contents")
-            }
-            if isGitRepo {
-                ToolbarItem(placement: .automatic) {
-                    Button(action: toggleDiff) {
-                        Label(showDiff ? "Hide Diff" : "Git Diff", systemImage: showDiff ? "doc.text" : "arrow.left.arrow.right")
-                    }
-                    .help(showDiff ? "Hide Git Diff" : "Show Git Diff")
-                }
-            }
-            ToolbarItem(placement: .automatic) {
-                Button(action: copySource) {
-                    Label("Copy MD", systemImage: "doc.on.doc")
-                }
-                .help("Copy Markdown Source (Cmd+Shift+C)")
-            }
-            ToolbarItem(placement: .automatic) {
-                Button(action: copyRendered) {
-                    Label("Copy HTML", systemImage: "doc.richtext")
-                }
-                .help("Copy HTML (Cmd+Option+C)")
-            }
-            ToolbarItem(placement: .automatic) {
-                Button(action: exportHTML) {
-                    Label("Export HTML", systemImage: "square.and.arrow.up")
-                }
-                .help("Export HTML (Cmd+E)")
             }
         }
         .focusedValue(\.toggleSearch, toggleSearch)
@@ -311,6 +279,47 @@ public struct ContentView: View {
         }
         .frame(width: 220)
         .background(.background)
+    }
+
+    // MARK: - Action Bar
+
+    private var actionBar: some View {
+        HStack(spacing: 4) {
+            actionButton("Contents", icon: "list.bullet.indent", active: showTOC) {
+                showTOC.toggle()
+            }
+            if isGitRepo {
+                actionButton("Git Diff", icon: "arrow.left.arrow.right", active: showDiff) {
+                    toggleDiff()
+                }
+            }
+
+            Spacer()
+
+            actionButton("Copy MD", icon: "doc.on.doc") {
+                copySource()
+            }
+            actionButton("Copy HTML", icon: "doc.richtext") {
+                copyRendered()
+            }
+            actionButton("Export HTML", icon: "square.and.arrow.up") {
+                exportHTML()
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(.bar)
+    }
+
+    private func actionButton(_ title: String, icon: String, active: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 11))
+                .labelStyle(.titleAndIcon)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .tint(active ? .accentColor : nil)
     }
 
     // MARK: - Search Bar
