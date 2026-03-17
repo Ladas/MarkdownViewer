@@ -119,8 +119,8 @@
         });
     }
 
-    // Copy entire rendered content with diagrams as inline PNG images
-    async function copyRenderedContent() {
+    // Shared: clone content, convert mermaid to PNG, clean up artifacts
+    async function prepareCleanContent() {
         var content = document.getElementById('content');
 
         // Convert all mermaid SVGs to PNG using originals (for correct dimensions)
@@ -156,10 +156,84 @@
             (container || pre).replaceWith(img);
         });
 
+        // Inline table styles for Google Docs compatibility
+        clone.querySelectorAll('table').forEach(function(table) {
+            table.style.borderCollapse = 'collapse';
+            table.style.borderSpacing = '0';
+            table.style.width = 'auto';
+            table.style.marginBottom = '16px';
+            table.style.fontSize = '14px';
+        });
+        clone.querySelectorAll('th').forEach(function(th) {
+            th.style.padding = '6px 13px';
+            th.style.border = '1px solid #d0d7de';
+            th.style.fontWeight = '600';
+            th.style.backgroundColor = '#f6f8fa';
+            th.style.textAlign = 'left';
+        });
+        clone.querySelectorAll('td').forEach(function(td) {
+            td.style.padding = '6px 13px';
+            td.style.border = '1px solid #d0d7de';
+            td.style.textAlign = 'left';
+        });
+        clone.querySelectorAll('tr:nth-child(2n)').forEach(function(tr) {
+            tr.querySelectorAll('td').forEach(function(td) {
+                td.style.backgroundColor = '#f6f8fa';
+            });
+        });
+
         clone.normalize();
+        return clone;
+    }
+
+    // Copy rendered content as standalone HTML (with CSS inlined, mermaid as PNG)
+    async function copyRenderedContent() {
+        var clone = await prepareCleanContent();
+
+        // Collect CSS from all stylesheets
+        var styles = '';
+        for (var i = 0; i < document.styleSheets.length; i++) {
+            try {
+                var rules = document.styleSheets[i].cssRules;
+                for (var j = 0; j < rules.length; j++) {
+                    styles += rules[j].cssText + '\n';
+                }
+            } catch(e) {}
+        }
+
+        var html = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>\n'
+            + styles
+            + '</style>\n</head>\n<body>\n<article class="markdown-body">\n'
+            + clone.innerHTML
+            + '\n</article>\n</body>\n</html>';
 
         if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyRendered) {
-            window.webkit.messageHandlers.copyRendered.postMessage(clone.innerHTML);
+            window.webkit.messageHandlers.copyRendered.postMessage(html);
+        }
+    }
+
+    // Export as standalone HTML file
+    async function exportHTMLContent() {
+        var clone = await prepareCleanContent();
+
+        var styles = '';
+        for (var i = 0; i < document.styleSheets.length; i++) {
+            try {
+                var rules = document.styleSheets[i].cssRules;
+                for (var j = 0; j < rules.length; j++) {
+                    styles += rules[j].cssText + '\n';
+                }
+            } catch(e) {}
+        }
+
+        var html = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>\n'
+            + styles
+            + '</style>\n</head>\n<body>\n<article class="markdown-body">\n'
+            + clone.innerHTML
+            + '\n</article>\n</body>\n</html>';
+
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.exportHTML) {
+            window.webkit.messageHandlers.exportHTML.postMessage(html);
         }
     }
     </script>
@@ -290,6 +364,32 @@
         _searchMarks = [];
         _currentIndex = -1;
         return {total: 0, current: 0};
+    }
+    </script>
+
+    <script>
+    // Table of Contents: scroll to heading by index
+    function scrollToHeading(index) {
+        var headings = document.getElementById('content').querySelectorAll('h1, h2, h3, h4, h5, h6');
+        if (index >= 0 && index < headings.length) {
+            headings[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    // Appearance override
+    function setAppearance(mode) {
+        if (mode === 'light') {
+            document.documentElement.style.colorScheme = 'light';
+            document.documentElement.classList.remove('dark-override');
+            document.documentElement.classList.add('light-override');
+        } else if (mode === 'dark') {
+            document.documentElement.style.colorScheme = 'dark';
+            document.documentElement.classList.remove('light-override');
+            document.documentElement.classList.add('dark-override');
+        } else {
+            document.documentElement.style.colorScheme = '';
+            document.documentElement.classList.remove('light-override', 'dark-override');
+        }
     }
     </script>
 </body>

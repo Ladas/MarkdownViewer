@@ -11,10 +11,14 @@ struct MarkdownViewerApp: App {
     @FocusedValue(\.zoomIn) var zoomIn
     @FocusedValue(\.zoomOut) var zoomOut
     @FocusedValue(\.zoomReset) var zoomReset
+    @FocusedValue(\.exportHTML) var exportHTML
+    @FocusedValue(\.toggleTOC) var toggleTOC
+    @FocusedValue(\.toggleDiff) var toggleDiff
+    @FocusedValue(\.setAppearance) var setAppearance
 
     var body: some Scene {
         DocumentGroup(viewing: MarkdownDocument.self) { config in
-            ContentView(document: config.document)
+            ContentView(document: config.document, fileURL: config.fileURL)
                 .navigationSubtitle(config.fileURL?.path ?? "")
         }
         .commands {
@@ -41,10 +45,15 @@ struct MarkdownViewerApp: App {
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
 
-                Button("Copy Rendered (for Google Docs)") {
+                Button("Copy HTML") {
                     copyRendered?()
                 }
                 .keyboardShortcut("c", modifiers: [.command, .option])
+
+                Button("Export HTML...") {
+                    exportHTML?()
+                }
+                .keyboardShortcut("e", modifiers: .command)
             }
 
             CommandGroup(after: .toolbar) {
@@ -64,6 +73,32 @@ struct MarkdownViewerApp: App {
                     zoomReset?()
                 }
                 .keyboardShortcut("0", modifiers: .command)
+
+                Divider()
+
+                Button("Table of Contents") {
+                    toggleTOC?()
+                }
+                .keyboardShortcut("t", modifiers: [.control, .command])
+
+                Button("Git Diff") {
+                    toggleDiff?()
+                }
+                .keyboardShortcut("d", modifiers: .command)
+
+                Divider()
+
+                Menu("Appearance") {
+                    Button("System") {
+                        setAppearance?("auto")
+                    }
+                    Button("Light") {
+                        setAppearance?("light")
+                    }
+                    Button("Dark") {
+                        setAppearance?("dark")
+                    }
+                }
             }
         }
     }
