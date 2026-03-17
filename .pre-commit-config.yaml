@@ -6,6 +6,11 @@ repos:
       entry: scripts/hooks/commit-msg
       language: script
       stages: [commit-msg]
+- repo: https://github.com/shellcheck-py/shellcheck-py
+  rev: v0.10.0.1
+  hooks:
+    - id: shellcheck
+      files: \.sh$|/commit-msg$
 - repo: https://github.com/gitleaks/gitleaks
   rev: v8.21.2
   hooks:

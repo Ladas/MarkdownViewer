@@ -1,25 +1,36 @@
-.PHONY: deps build test app install clean
+.PHONY: deps verify-deps build test app install clean
 
 APP_NAME = MarkdownViewer
 VENDOR_DIR = Sources/MarkdownViewerLib/Resources/vendor
 
+# Pinned versions
+MARKED_VERSION = 15.0.8
+MERMAID_VERSION = 11.4.1
+DOMPURIFY_VERSION = 3.2.4
+GH_MARKDOWN_CSS_VERSION = 5.8.1
+
 deps:
 	@mkdir -p $(VENDOR_DIR)
-	@echo "Downloading marked.js..."
-	@curl -sL "https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js" -o $(VENDOR_DIR)/marked.min.js
-	@echo "Downloading mermaid.js..."
-	@curl -sL "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js" -o $(VENDOR_DIR)/mermaid.min.js
-	@echo "Downloading DOMPurify..."
-	@curl -sL "https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" -o $(VENDOR_DIR)/purify.min.js
-	@echo "Downloading github-markdown.css..."
-	@curl -sL "https://cdn.jsdelivr.net/npm/github-markdown-css@5.8.1/github-markdown.css" -o $(VENDOR_DIR)/github-markdown.css
+	@echo "Downloading marked.js@$(MARKED_VERSION)..."
+	@curl -sL "https://cdn.jsdelivr.net/npm/marked@$(MARKED_VERSION)/marked.min.js" -o $(VENDOR_DIR)/marked.min.js
+	@echo "Downloading mermaid.js@$(MERMAID_VERSION)..."
+	@curl -sL "https://cdn.jsdelivr.net/npm/mermaid@$(MERMAID_VERSION)/dist/mermaid.min.js" -o $(VENDOR_DIR)/mermaid.min.js
+	@echo "Downloading DOMPurify@$(DOMPURIFY_VERSION)..."
+	@curl -sL "https://cdn.jsdelivr.net/npm/dompurify@$(DOMPURIFY_VERSION)/dist/purify.min.js" -o $(VENDOR_DIR)/purify.min.js
+	@echo "Downloading github-markdown-css@$(GH_MARKDOWN_CSS_VERSION)..."
+	@curl -sL "https://cdn.jsdelivr.net/npm/github-markdown-css@$(GH_MARKDOWN_CSS_VERSION)/github-markdown.css" -o $(VENDOR_DIR)/github-markdown.css
 	@echo "Done."
+
+verify-deps:
+	@echo "Verifying vendor dependency checksums..."
+	@cd $(VENDOR_DIR) && shasum -a 256 -c ../../../../vendor-checksums.sha256
+	@echo "All checksums verified."
 
 build: deps
 	swift build -c release
 
-test: deps
-	DEVELOPER_DIR=/Users/lsmola/Downloads/Xcode.app/Contents/Developer swift test
+test:
+	swift test
 
 app: build
 	@rm -rf $(APP_NAME).app

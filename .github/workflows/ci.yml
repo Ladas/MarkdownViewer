@@ -6,14 +6,20 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Download vendor dependencies
         run: make deps
+
+      - name: Verify vendor integrity
+        run: make verify-deps
 
       - name: Build (release)
         run: swift build -c release
@@ -30,11 +36,12 @@ jobs:
           test -f MarkdownViewer.app/Contents/Info.plist
           test -d MarkdownViewer.app/Contents/Resources/MarkdownViewer_MarkdownViewerLib.bundle
 
-  lint:
-    runs-on: macos-15
+  gitleaks:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Check Swift formatting
-        run: |
-          # Verify all Swift files compile without warnings
-          swift build 2>&1 | grep -i warning || echo "No warnings"
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@44c470fca36adba3da7bbc4ecff6e063e4e8e608 # v2.3.8
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

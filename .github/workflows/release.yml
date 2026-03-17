@@ -12,10 +12,13 @@ jobs:
   build-and-release:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Download dependencies
         run: make deps
+
+      - name: Verify vendor integrity
+        run: make verify-deps
 
       - name: Build app bundle
         run: make app
@@ -25,7 +28,7 @@ jobs:
           ditto -c -k --keepParent MarkdownViewer.app MarkdownViewer-${{ github.ref_name }}-arm64.zip
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
         with:
           files: MarkdownViewer-${{ github.ref_name }}-arm64.zip
           generate_release_notes: true

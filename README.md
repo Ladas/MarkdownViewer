@@ -1,6 +1,7 @@
 # Markdown Viewer
 
 [![CI](https://github.com/Ladas/MarkdownViewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Ladas/MarkdownViewer/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Ladas/MarkdownViewer/badge)](https://scorecard.dev/viewer/?uri=github.com/Ladas/MarkdownViewer)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue.svg)](https://www.apple.com/macos/)
 [![Swift 5.9+](https://img.shields.io/badge/Swift-5.9%2B-orange.svg)](https://swift.org)
