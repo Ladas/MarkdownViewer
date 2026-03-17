@@ -9,7 +9,6 @@ struct MarkdownWebView: NSViewRepresentable {
     var navigationTrigger: Int = 0
     var navigationForward: Bool = true
     var copyRenderedTrigger: Int = 0
-    var copyHTMLTrigger: Int = 0
     var zoomLevel: Double = 1.0
     var scrollToHeadingTrigger: Int = 0
     var scrollToHeadingIndex: Int = -1
@@ -21,7 +20,6 @@ struct MarkdownWebView: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         config.userContentController.add(context.coordinator, name: "copyImage")
         config.userContentController.add(context.coordinator, name: "copyRendered")
-        config.userContentController.add(context.coordinator, name: "copyHTMLSource")
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.allowsMagnification = true
@@ -52,7 +50,6 @@ struct MarkdownWebView: NSViewRepresentable {
         let searchChanged = coord.lastSearchText != searchText
         let navChanged = coord.lastNavTrigger != navigationTrigger
         let copyChanged = coord.lastCopyRenderedTrigger != copyRenderedTrigger
-        let copyHTMLChanged = coord.lastCopyHTMLTrigger != copyHTMLTrigger
         let scrollChanged = coord.lastScrollTrigger != scrollToHeadingTrigger
 
         if searchChanged {
@@ -70,12 +67,6 @@ struct MarkdownWebView: NSViewRepresentable {
             coord.lastCopyRenderedTrigger = copyRenderedTrigger
             guard coord.pageLoaded else { return }
             webView.evaluateJavaScript("copyRenderedContent()") { _, _ in }
-        }
-
-        if copyHTMLChanged {
-            coord.lastCopyHTMLTrigger = copyHTMLTrigger
-            guard coord.pageLoaded else { return }
-            webView.evaluateJavaScript("copyHTMLSource()") { _, _ in }
         }
 
         if scrollChanged {
@@ -106,7 +97,6 @@ struct MarkdownWebView: NSViewRepresentable {
         var lastSearchText: String?
         var lastNavTrigger: Int = 0
         var lastCopyRenderedTrigger: Int = 0
-        var lastCopyHTMLTrigger: Int = 0
         var lastScrollTrigger: Int = 0
         var lastAppearanceMode: String = "auto"
         var pageLoaded = false
@@ -125,8 +115,6 @@ struct MarkdownWebView: NSViewRepresentable {
                 handleCopyImage(message)
             } else if message.name == "copyRendered" {
                 handleCopyRendered(message)
-            } else if message.name == "copyHTMLSource" {
-                handleCopyHTMLSource(message)
             }
         }
 
@@ -148,14 +136,8 @@ struct MarkdownWebView: NSViewRepresentable {
             guard let html = message.body as? String else { return }
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
+            // .html for rich paste (Google Docs), .string for plain text paste
             pasteboard.setString(html, forType: .html)
-            onCopyDone?()
-        }
-
-        private func handleCopyHTMLSource(_ message: WKScriptMessage) {
-            guard let html = message.body as? String else { return }
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
             pasteboard.setString(html, forType: .string)
             onCopyDone?()
         }

@@ -160,16 +160,8 @@
         return clone;
     }
 
-    // Copy rendered content as rich-text HTML (for pasting into Google Docs etc.)
+    // Copy rendered content as standalone HTML (with CSS inlined, mermaid as PNG)
     async function copyRenderedContent() {
-        var clone = await prepareCleanContent();
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyRendered) {
-            window.webkit.messageHandlers.copyRendered.postMessage(clone.innerHTML);
-        }
-    }
-
-    // Copy as standalone HTML document source (plain text, with CSS inlined)
-    async function copyHTMLSource() {
         var clone = await prepareCleanContent();
 
         // Collect CSS from all stylesheets
@@ -189,8 +181,8 @@
             + clone.innerHTML
             + '\n</article>\n</body>\n</html>';
 
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyHTMLSource) {
-            window.webkit.messageHandlers.copyHTMLSource.postMessage(html);
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyRendered) {
+            window.webkit.messageHandlers.copyRendered.postMessage(html);
         }
     }
     </script>

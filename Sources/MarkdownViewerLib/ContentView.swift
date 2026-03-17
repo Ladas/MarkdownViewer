@@ -69,9 +69,6 @@ struct ToggleTOCKey: FocusedValueKey {
 struct ToggleDiffKey: FocusedValueKey {
     typealias Value = () -> Void
 }
-struct CopyHTMLKey: FocusedValueKey {
-    typealias Value = () -> Void
-}
 struct SetAppearanceKey: FocusedValueKey {
     typealias Value = (String) -> Void
 }
@@ -117,10 +114,6 @@ public extension FocusedValues {
         get { self[ToggleDiffKey.self] }
         set { self[ToggleDiffKey.self] = newValue }
     }
-    var copyHTML: (() -> Void)? {
-        get { self[CopyHTMLKey.self] }
-        set { self[CopyHTMLKey.self] = newValue }
-    }
     var setAppearance: ((String) -> Void)? {
         get { self[SetAppearanceKey.self] }
         set { self[SetAppearanceKey.self] = newValue }
@@ -141,7 +134,6 @@ public struct ContentView: View {
     @State private var navigationTrigger = 0
     @State private var navigationForward = true
     @State private var copyRenderedTrigger = 0
-    @State private var copyHTMLTrigger = 0
     @State private var zoomLevel: Double = 1.0
     @State private var showCopied = false
     @State private var showTOC = false
@@ -188,7 +180,6 @@ public struct ContentView: View {
                     navigationTrigger: navigationTrigger,
                     navigationForward: navigationForward,
                     copyRenderedTrigger: copyRenderedTrigger,
-                    copyHTMLTrigger: copyHTMLTrigger,
                     zoomLevel: zoomLevel,
                     scrollToHeadingTrigger: scrollToHeadingTrigger,
                     scrollToHeadingIndex: scrollToHeadingIndex,
@@ -238,13 +229,7 @@ public struct ContentView: View {
                 Button(action: copyRendered) {
                     Image(systemName: "doc.richtext")
                 }
-                .help("Copy Rendered for Google Docs (Cmd+Option+C)")
-            }
-            ToolbarItem(placement: .automatic) {
-                Button(action: copyHTML) {
-                    Image(systemName: "chevron.left.forwardslash.chevron.right")
-                }
-                .help("Copy as HTML Document (Cmd+Option+Shift+C)")
+                .help("Copy HTML (Cmd+Option+C)")
             }
         }
         .focusedValue(\.toggleSearch, toggleSearch)
@@ -252,7 +237,6 @@ public struct ContentView: View {
         .focusedValue(\.findPrevious, findPrevious)
         .focusedValue(\.copySource, copySource)
         .focusedValue(\.copyRendered, copyRendered)
-        .focusedValue(\.copyHTML, copyHTML)
         .focusedValue(\.zoomIn, { zoomLevel = min(zoomLevel + 0.1, 3.0) })
         .focusedValue(\.zoomOut, { zoomLevel = max(zoomLevel - 0.1, 0.5) })
         .focusedValue(\.zoomReset, { zoomLevel = 1.0 })
@@ -431,10 +415,6 @@ public struct ContentView: View {
 
     private func copyRendered() {
         copyRenderedTrigger += 1
-    }
-
-    private func copyHTML() {
-        copyHTMLTrigger += 1
     }
 
     private func showCopiedToast() {

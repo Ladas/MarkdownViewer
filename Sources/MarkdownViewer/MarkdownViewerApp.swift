@@ -11,7 +11,6 @@ struct MarkdownViewerApp: App {
     @FocusedValue(\.zoomIn) var zoomIn
     @FocusedValue(\.zoomOut) var zoomOut
     @FocusedValue(\.zoomReset) var zoomReset
-    @FocusedValue(\.copyHTML) var copyHTML
     @FocusedValue(\.toggleTOC) var toggleTOC
     @FocusedValue(\.toggleDiff) var toggleDiff
     @FocusedValue(\.setAppearance) var setAppearance
@@ -45,15 +44,10 @@ struct MarkdownViewerApp: App {
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
 
-                Button("Copy Rendered (for Google Docs)") {
+                Button("Copy HTML") {
                     copyRendered?()
                 }
                 .keyboardShortcut("c", modifiers: [.command, .option])
-
-                Button("Copy as HTML Document") {
-                    copyHTML?()
-                }
-                .keyboardShortcut("c", modifiers: [.command, .option, .shift])
             }
 
             CommandGroup(after: .toolbar) {
