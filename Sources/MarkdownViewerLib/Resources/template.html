@@ -156,6 +156,32 @@
             (container || pre).replaceWith(img);
         });
 
+        // Inline table styles for Google Docs compatibility
+        clone.querySelectorAll('table').forEach(function(table) {
+            table.style.borderCollapse = 'collapse';
+            table.style.borderSpacing = '0';
+            table.style.width = 'auto';
+            table.style.marginBottom = '16px';
+            table.style.fontSize = '14px';
+        });
+        clone.querySelectorAll('th').forEach(function(th) {
+            th.style.padding = '6px 13px';
+            th.style.border = '1px solid #d0d7de';
+            th.style.fontWeight = '600';
+            th.style.backgroundColor = '#f6f8fa';
+            th.style.textAlign = 'left';
+        });
+        clone.querySelectorAll('td').forEach(function(td) {
+            td.style.padding = '6px 13px';
+            td.style.border = '1px solid #d0d7de';
+            td.style.textAlign = 'left';
+        });
+        clone.querySelectorAll('tr:nth-child(2n)').forEach(function(tr) {
+            tr.querySelectorAll('td').forEach(function(td) {
+                td.style.backgroundColor = '#f6f8fa';
+            });
+        });
+
         clone.normalize();
         return clone;
     }
