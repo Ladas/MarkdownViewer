@@ -292,5 +292,31 @@
         return {total: 0, current: 0};
     }
     </script>
+
+    <script>
+    // Table of Contents: scroll to heading by index
+    function scrollToHeading(index) {
+        var headings = document.getElementById('content').querySelectorAll('h1, h2, h3, h4, h5, h6');
+        if (index >= 0 && index < headings.length) {
+            headings[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    // Appearance override
+    function setAppearance(mode) {
+        if (mode === 'light') {
+            document.documentElement.style.colorScheme = 'light';
+            document.documentElement.classList.remove('dark-override');
+            document.documentElement.classList.add('light-override');
+        } else if (mode === 'dark') {
+            document.documentElement.style.colorScheme = 'dark';
+            document.documentElement.classList.remove('light-override');
+            document.documentElement.classList.add('dark-override');
+        } else {
+            document.documentElement.style.colorScheme = '';
+            document.documentElement.classList.remove('light-override', 'dark-override');
+        }
+    }
+    </script>
 </body>
 </html>

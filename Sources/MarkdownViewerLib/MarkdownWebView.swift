@@ -4,11 +4,15 @@ import AppKit
 
 struct MarkdownWebView: NSViewRepresentable {
     let markdown: String
+    var overrideHTML: String?
     var searchText: String = ""
     var navigationTrigger: Int = 0
     var navigationForward: Bool = true
     var copyRenderedTrigger: Int = 0
     var zoomLevel: Double = 1.0
+    var scrollToHeadingTrigger: Int = 0
+    var scrollToHeadingIndex: Int = -1
+    var appearanceMode: String = "auto"
     var onSearchResult: ((Int, Int) -> Void)?
     var onCopyDone: (() -> Void)?
 
@@ -20,8 +24,9 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.allowsMagnification = true
         context.coordinator.lastMarkdown = markdown
+        context.coordinator.lastOverrideHTML = overrideHTML
 
-        let html = HTMLRenderer.render(markdown: markdown)
+        let html = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
         webView.loadHTMLString(html, baseURL: nil)
         return webView
     }
@@ -31,11 +36,13 @@ struct MarkdownWebView: NSViewRepresentable {
         coord.onSearchResult = onSearchResult
         coord.onCopyDone = onCopyDone
 
-        if coord.lastMarkdown != markdown {
+        let contentChanged = coord.lastMarkdown != markdown || coord.lastOverrideHTML != overrideHTML
+        if contentChanged {
             coord.lastMarkdown = markdown
+            coord.lastOverrideHTML = overrideHTML
             coord.lastSearchText = nil
             coord.pageLoaded = false
-            let html = HTMLRenderer.render(markdown: markdown)
+            let html = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
             webView.loadHTMLString(html, baseURL: nil)
             return
         }
@@ -43,6 +50,7 @@ struct MarkdownWebView: NSViewRepresentable {
         let searchChanged = coord.lastSearchText != searchText
         let navChanged = coord.lastNavTrigger != navigationTrigger
         let copyChanged = coord.lastCopyRenderedTrigger != copyRenderedTrigger
+        let scrollChanged = coord.lastScrollTrigger != scrollToHeadingTrigger
 
         if searchChanged {
             coord.lastSearchText = searchText
@@ -60,6 +68,21 @@ struct MarkdownWebView: NSViewRepresentable {
             guard coord.pageLoaded else { return }
             webView.evaluateJavaScript("copyRenderedContent()") { _, _ in }
         }
+
+        if scrollChanged {
+            coord.lastScrollTrigger = scrollToHeadingTrigger
+            if scrollToHeadingIndex >= 0 && coord.pageLoaded {
+                webView.evaluateJavaScript("scrollToHeading(\(scrollToHeadingIndex))") { _, _ in }
+            }
+        }
+
+        if coord.lastAppearanceMode != appearanceMode {
+            coord.lastAppearanceMode = appearanceMode
+            if coord.pageLoaded {
+                let escaped = appearanceMode.replacingOccurrences(of: "'", with: "\\'")
+                webView.evaluateJavaScript("setAppearance('\(escaped)')") { _, _ in }
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -70,11 +93,15 @@ struct MarkdownWebView: NSViewRepresentable {
         private static let allowedSchemes: Set<String> = ["http", "https", "mailto"]
 
         var lastMarkdown: String?
+        var lastOverrideHTML: String?
         var lastSearchText: String?
         var lastNavTrigger: Int = 0
         var lastCopyRenderedTrigger: Int = 0
+        var lastScrollTrigger: Int = 0
+        var lastAppearanceMode: String = "auto"
         var pageLoaded = false
         var pendingSearch: String?
+        var pendingAppearance: String?
         var onSearchResult: ((Int, Int) -> Void)?
         var onCopyDone: (() -> Void)?
 
@@ -158,6 +185,15 @@ struct MarkdownWebView: NSViewRepresentable {
             if let search = pendingSearch {
                 pendingSearch = nil
                 performSearch(search, in: webView)
+            }
+            if let appearance = pendingAppearance {
+                pendingAppearance = nil
+                let escaped = appearance.replacingOccurrences(of: "'", with: "\\'")
+                webView.evaluateJavaScript("setAppearance('\(escaped)')") { _, _ in }
+            }
+            if lastAppearanceMode != "auto" {
+                let escaped = lastAppearanceMode.replacingOccurrences(of: "'", with: "\\'")
+                webView.evaluateJavaScript("setAppearance('\(escaped)')") { _, _ in }
             }
         }
 

@@ -11,10 +11,13 @@ struct MarkdownViewerApp: App {
     @FocusedValue(\.zoomIn) var zoomIn
     @FocusedValue(\.zoomOut) var zoomOut
     @FocusedValue(\.zoomReset) var zoomReset
+    @FocusedValue(\.toggleTOC) var toggleTOC
+    @FocusedValue(\.toggleDiff) var toggleDiff
+    @FocusedValue(\.setAppearance) var setAppearance
 
     var body: some Scene {
         DocumentGroup(viewing: MarkdownDocument.self) { config in
-            ContentView(document: config.document)
+            ContentView(document: config.document, fileURL: config.fileURL)
                 .navigationSubtitle(config.fileURL?.path ?? "")
         }
         .commands {
@@ -64,6 +67,32 @@ struct MarkdownViewerApp: App {
                     zoomReset?()
                 }
                 .keyboardShortcut("0", modifiers: .command)
+
+                Divider()
+
+                Button("Table of Contents") {
+                    toggleTOC?()
+                }
+                .keyboardShortcut("t", modifiers: [.control, .command])
+
+                Button("Git Diff") {
+                    toggleDiff?()
+                }
+                .keyboardShortcut("d", modifiers: .command)
+
+                Divider()
+
+                Menu("Appearance") {
+                    Button("System") {
+                        setAppearance?("auto")
+                    }
+                    Button("Light") {
+                        setAppearance?("light")
+                    }
+                    Button("Dark") {
+                        setAppearance?("dark")
+                    }
+                }
             }
         }
     }

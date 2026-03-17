@@ -6,3 +6,5 @@ Sources/MarkdownViewerLib/Resources/vendor/*
 .DS_Store
 *.xcodeproj
 xcuserdata/
+AppIcon.icns
+AppIcon.iconset/

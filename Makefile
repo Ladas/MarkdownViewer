@@ -1,4 +1,4 @@
-.PHONY: deps verify-deps build test app install clean
+.PHONY: deps verify-deps build test icon app install clean
 
 APP_NAME = MarkdownViewer
 VENDOR_DIR = Sources/MarkdownViewerLib/Resources/vendor
@@ -32,7 +32,10 @@ build: deps
 test:
 	swift test
 
-app: build
+icon:
+	swift scripts/generate-icon.swift
+
+app: build icon
 	@rm -rf $(APP_NAME).app
 	@mkdir -p $(APP_NAME).app/Contents/MacOS
 	@mkdir -p $(APP_NAME).app/Contents/Resources
@@ -40,6 +43,7 @@ app: build
 		cp "$$BIN_PATH/$(APP_NAME)" $(APP_NAME).app/Contents/MacOS/ && \
 		cp -r "$$BIN_PATH/MarkdownViewer_MarkdownViewerLib.bundle" $(APP_NAME).app/Contents/Resources/ 2>/dev/null || true
 	@cp Info.plist $(APP_NAME).app/Contents/
+	@cp AppIcon.icns $(APP_NAME).app/Contents/Resources/ 2>/dev/null || true
 	@echo -n "APPL????" > $(APP_NAME).app/Contents/PkgInfo
 	@codesign --force --sign - $(APP_NAME).app
 	@echo "Built $(APP_NAME).app"
