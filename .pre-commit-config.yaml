@@ -1,0 +1,12 @@
+repos:
+- repo: local
+  hooks:
+    - id: ai-assisted-by-trailer
+      name: Replace Co-Authored-By with Assisted-By
+      entry: scripts/hooks/commit-msg
+      language: script
+      stages: [commit-msg]
+- repo: https://github.com/gitleaks/gitleaks
+  rev: v8.21.2
+  hooks:
+    - id: gitleaks
