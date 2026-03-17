@@ -119,8 +119,8 @@
         });
     }
 
-    // Copy entire rendered content with diagrams as inline PNG images
-    async function copyRenderedContent() {
+    // Shared: clone content, convert mermaid to PNG, clean up artifacts
+    async function prepareCleanContent() {
         var content = document.getElementById('content');
 
         // Convert all mermaid SVGs to PNG using originals (for correct dimensions)
@@ -157,9 +157,40 @@
         });
 
         clone.normalize();
+        return clone;
+    }
 
+    // Copy rendered content as rich-text HTML (for pasting into Google Docs etc.)
+    async function copyRenderedContent() {
+        var clone = await prepareCleanContent();
         if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyRendered) {
             window.webkit.messageHandlers.copyRendered.postMessage(clone.innerHTML);
+        }
+    }
+
+    // Copy as standalone HTML document source (plain text, with CSS inlined)
+    async function copyHTMLSource() {
+        var clone = await prepareCleanContent();
+
+        // Collect CSS from all stylesheets
+        var styles = '';
+        for (var i = 0; i < document.styleSheets.length; i++) {
+            try {
+                var rules = document.styleSheets[i].cssRules;
+                for (var j = 0; j < rules.length; j++) {
+                    styles += rules[j].cssText + '\n';
+                }
+            } catch(e) {}
+        }
+
+        var html = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>\n'
+            + styles
+            + '</style>\n</head>\n<body>\n<article class="markdown-body">\n'
+            + clone.innerHTML
+            + '\n</article>\n</body>\n</html>';
+
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyHTMLSource) {
+            window.webkit.messageHandlers.copyHTMLSource.postMessage(html);
         }
     }
     </script>
