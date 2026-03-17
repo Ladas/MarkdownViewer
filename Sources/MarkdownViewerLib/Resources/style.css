@@ -1,0 +1,113 @@
+body {
+    margin: 0;
+    padding: 16px 32px;
+    background: #ffffff;
+    color: #1f2328;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background: #0d1117;
+        color: #e6edf3;
+    }
+}
+
+.markdown-body {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 32px;
+}
+
+.mermaid {
+    text-align: center;
+    margin: 16px 0;
+}
+
+.mermaid-container {
+    position: relative;
+}
+
+.mermaid-copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 10;
+}
+
+.mermaid-container:hover .mermaid-copy-btn {
+    opacity: 1;
+}
+
+.mermaid-copy-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+@media (prefers-color-scheme: dark) {
+    .mermaid-copy-btn {
+        background: rgba(255, 255, 255, 0.2);
+    }
+    .mermaid-copy-btn:hover {
+        background: rgba(255, 255, 255, 0.35);
+    }
+}
+
+body.pannable {
+    cursor: grab;
+}
+
+body.panning {
+    cursor: grabbing;
+    user-select: none;
+}
+
+mark.search-highlight {
+    background-color: rgba(255, 230, 0, 0.4);
+    color: inherit;
+    border-radius: 2px;
+    padding: 1px 0;
+}
+
+mark.search-highlight.current {
+    background-color: rgba(255, 150, 50, 0.7);
+}
+
+@media (prefers-color-scheme: dark) {
+    mark.search-highlight {
+        background-color: rgba(255, 230, 0, 0.3);
+    }
+    mark.search-highlight.current {
+        background-color: rgba(255, 150, 50, 0.5);
+    }
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+    ::-webkit-scrollbar-thumb {
+        background: #484f58;
+    }
+}

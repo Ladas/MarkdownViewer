@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+MarkdownViewer.app/
+Sources/MarkdownViewerLib/Resources/vendor/*
+!Sources/MarkdownViewerLib/Resources/vendor/.gitkeep
+.DS_Store
+*.xcodeproj
+xcuserdata/

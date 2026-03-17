@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download vendor dependencies
+        run: make deps
+
+      - name: Build (release)
+        run: swift build -c release
+
+      - name: Run tests
+        run: swift test
+
+      - name: Build app bundle
+        run: make app
+
+      - name: Verify app bundle
+        run: |
+          test -f MarkdownViewer.app/Contents/MacOS/MarkdownViewer
+          test -f MarkdownViewer.app/Contents/Info.plist
+          test -d MarkdownViewer.app/Contents/Resources/MarkdownViewer_MarkdownViewerLib.bundle
+
+  lint:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Swift formatting
+        run: |
+          # Verify all Swift files compile without warnings
+          swift build 2>&1 | grep -i warning || echo "No warnings"

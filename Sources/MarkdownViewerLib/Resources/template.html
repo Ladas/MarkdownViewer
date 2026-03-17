@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https:;">
+    <style>/* {{VENDOR_CSS}} */</style>
+    <style>/* {{CSS}} */</style>
+    <script>/* {{PURIFY_JS}} */</script>
+    <script>/* {{MARKED_JS}} */</script>
+    <script>/* {{MERMAID_JS}} */</script>
+</head>
+<body>
+    <article class="markdown-body" id="content"></article>
+
+    <script>
+    (function() {
+        var markdown = `{{MARKDOWN_CONTENT}}`;
+
+        if (typeof marked !== 'undefined') {
+            var rawHTML = marked.parse(markdown);
+            if (typeof DOMPurify !== 'undefined') {
+                rawHTML = DOMPurify.sanitize(rawHTML);
+            }
+            document.getElementById('content').innerHTML = rawHTML;
+        } else {
+            var el = document.getElementById('content');
+            var pre = document.createElement('pre');
+            pre.textContent = markdown;
+            el.appendChild(pre);
+        }
+
+        document.querySelectorAll('code.language-mermaid').forEach(function(el) {
+            var pre = el.parentElement;
+            var div = document.createElement('pre');
+            div.className = 'mermaid';
+            div.textContent = el.textContent;
+            pre.replaceWith(div);
+        });
+
+        if (typeof mermaid !== 'undefined') {
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+                securityLevel: 'strict'
+            });
+            mermaid.run()
+                .then(addDiagramCopyButtons)
+                .catch(function(e) { console.error('Mermaid error:', e); });
+        }
+    })();
+    </script>
+
+    <script>
+    // Shared: convert an SVG element to a PNG data URL (2x retina, white bg)
+    function svgToPngDataUrl(svg) {
+        return new Promise(function(resolve, reject) {
+            var rect = svg.getBoundingClientRect();
+            var w = Math.ceil(rect.width);
+            var h = Math.ceil(rect.height);
+            if (w === 0 || h === 0) { reject(new Error('zero size')); return; }
+
+            var clone = svg.cloneNode(true);
+            clone.setAttribute('width', w);
+            clone.setAttribute('height', h);
+
+            var svgData = new XMLSerializer().serializeToString(clone);
+            var encoded = btoa(unescape(encodeURIComponent(svgData)));
+
+            var canvas = document.createElement('canvas');
+            var scale = 2;
+            canvas.width = w * scale;
+            canvas.height = h * scale;
+            var ctx = canvas.getContext('2d');
+            ctx.scale(scale, scale);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+
+            var img = new Image();
+            img.onload = function() {
+                ctx.drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.onerror = function() { reject(new Error('render failed')); };
+            img.src = 'data:image/svg+xml;base64,' + encoded;
+        });
+    }
+
+    // Per-diagram hover copy buttons
+    function addDiagramCopyButtons() {
+        document.querySelectorAll('pre.mermaid').forEach(function(el) {
+            if (el.parentNode.classList && el.parentNode.classList.contains('mermaid-container')) return;
+            var svg = el.querySelector('svg');
+            if (!svg) return;
+
+            var wrapper = document.createElement('div');
+            wrapper.className = 'mermaid-container';
+            el.parentNode.insertBefore(wrapper, el);
+            wrapper.appendChild(el);
+
+            var btn = document.createElement('button');
+            btn.className = 'mermaid-copy-btn';
+            btn.textContent = 'Copy diagram';
+            btn.onclick = function(e) {
+                e.stopPropagation();
+                svgToPngDataUrl(svg).then(function(pngUrl) {
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyImage) {
+                        window.webkit.messageHandlers.copyImage.postMessage(pngUrl);
+                    }
+                    btn.textContent = 'Copied!';
+                    setTimeout(function() { btn.textContent = 'Copy diagram'; }, 1500);
+                }).catch(function() {
+                    btn.textContent = 'Error';
+                    setTimeout(function() { btn.textContent = 'Copy diagram'; }, 1500);
+                });
+            };
+            wrapper.appendChild(btn);
+        });
+    }
+
+    // Copy entire rendered content with diagrams as inline PNG images
+    async function copyRenderedContent() {
+        var content = document.getElementById('content');
+
+        // Convert all mermaid SVGs to PNG using originals (for correct dimensions)
+        var origMermaids = content.querySelectorAll('pre.mermaid');
+        var pngUrls = [];
+        for (var i = 0; i < origMermaids.length; i++) {
+            var svg = origMermaids[i].querySelector('svg');
+            if (svg) {
+                try { pngUrls.push(await svgToPngDataUrl(svg)); }
+                catch(e) { pngUrls.push(null); }
+            } else {
+                pngUrls.push(null);
+            }
+        }
+
+        // Clone and clean up
+        var clone = content.cloneNode(true);
+
+        // Remove UI artifacts
+        clone.querySelectorAll('.mermaid-copy-btn').forEach(function(b) { b.remove(); });
+        clone.querySelectorAll('mark.search-highlight').forEach(function(m) {
+            m.parentNode.replaceChild(document.createTextNode(m.textContent), m);
+        });
+
+        // Replace mermaid diagrams with PNG images
+        var cloneMermaids = clone.querySelectorAll('pre.mermaid');
+        cloneMermaids.forEach(function(pre, i) {
+            if (!pngUrls[i]) return;
+            var img = document.createElement('img');
+            img.src = pngUrls[i];
+            img.style.maxWidth = '100%';
+            var container = pre.closest('.mermaid-container');
+            (container || pre).replaceWith(img);
+        });
+
+        clone.normalize();
+
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyRendered) {
+            window.webkit.messageHandlers.copyRendered.postMessage(clone.innerHTML);
+        }
+    }
+    </script>
+
+    <script>
+    // Click-drag panning when zoomed
+    var _pan = { active: false, startX: 0, startY: 0, scrollX: 0, scrollY: 0 };
+
+    function isOverflowing() {
+        return document.documentElement.scrollWidth > window.innerWidth + 1 ||
+               document.documentElement.scrollHeight > window.innerHeight + 1;
+    }
+
+    document.addEventListener('mousedown', function(e) {
+        if (e.button !== 0) return;
+        if (e.target.closest('a, button, input, textarea, .mermaid-copy-btn')) return;
+        if (!isOverflowing()) return;
+
+        _pan.active = true;
+        _pan.startX = e.clientX;
+        _pan.startY = e.clientY;
+        _pan.scrollX = window.scrollX;
+        _pan.scrollY = window.scrollY;
+        document.body.classList.add('panning');
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!_pan.active) return;
+        window.scrollTo(
+            _pan.scrollX - (e.clientX - _pan.startX),
+            _pan.scrollY - (e.clientY - _pan.startY)
+        );
+    });
+
+    document.addEventListener('mouseup', function() {
+        if (_pan.active) {
+            _pan.active = false;
+            document.body.classList.remove('panning');
+        }
+    });
+
+    // Update cursor when zoom changes
+    new MutationObserver(function() {
+        document.body.classList.toggle('pannable', isOverflowing());
+    }).observe(document.documentElement, { attributes: true });
+    window.addEventListener('resize', function() {
+        document.body.classList.toggle('pannable', isOverflowing());
+    });
+    </script>
+
+    <script>
+    // Search functionality
+    var _searchMarks = [];
+    var _currentIndex = -1;
+
+    function performSearch(query) {
+        clearSearch();
+        if (!query) return {total: 0, current: 0};
+
+        var content = document.getElementById('content');
+        var walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+        var textNodes = [];
+        while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+        var lowerQuery = query.toLowerCase();
+
+        textNodes.forEach(function(textNode) {
+            var text = textNode.textContent;
+            var lower = text.toLowerCase();
+            var idx = lower.indexOf(lowerQuery);
+            if (idx === -1) return;
+
+            var frag = document.createDocumentFragment();
+            var lastIdx = 0;
+
+            while (idx !== -1) {
+                if (idx > lastIdx) {
+                    frag.appendChild(document.createTextNode(text.substring(lastIdx, idx)));
+                }
+                var mark = document.createElement('mark');
+                mark.className = 'search-highlight';
+                mark.textContent = text.substring(idx, idx + query.length);
+                frag.appendChild(mark);
+                _searchMarks.push(mark);
+                lastIdx = idx + query.length;
+                idx = lower.indexOf(lowerQuery, lastIdx);
+            }
+
+            if (lastIdx < text.length) {
+                frag.appendChild(document.createTextNode(text.substring(lastIdx)));
+            }
+
+            textNode.parentNode.replaceChild(frag, textNode);
+        });
+
+        if (_searchMarks.length > 0) {
+            _currentIndex = 0;
+            _searchMarks[0].classList.add('current');
+            _searchMarks[0].scrollIntoView({behavior: 'smooth', block: 'center'});
+        }
+
+        return {total: _searchMarks.length, current: _searchMarks.length > 0 ? 1 : 0};
+    }
+
+    function navigateSearch(direction) {
+        if (_searchMarks.length === 0) return {total: 0, current: 0};
+
+        _searchMarks[_currentIndex].classList.remove('current');
+
+        if (direction === 'next') {
+            _currentIndex = (_currentIndex + 1) % _searchMarks.length;
+        } else {
+            _currentIndex = (_currentIndex - 1 + _searchMarks.length) % _searchMarks.length;
+        }
+
+        _searchMarks[_currentIndex].classList.add('current');
+        _searchMarks[_currentIndex].scrollIntoView({behavior: 'smooth', block: 'center'});
+
+        return {total: _searchMarks.length, current: _currentIndex + 1};
+    }
+
+    function clearSearch() {
+        _searchMarks.forEach(function(mark) {
+            mark.parentNode.replaceChild(document.createTextNode(mark.textContent), mark);
+        });
+        document.getElementById('content').normalize();
+        _searchMarks = [];
+        _currentIndex = -1;
+        return {total: 0, current: 0};
+    }
+    </script>
+</body>
+</html>

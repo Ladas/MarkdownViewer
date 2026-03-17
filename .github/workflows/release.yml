@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download dependencies
+        run: make deps
+
+      - name: Build app bundle
+        run: make app
+
+      - name: Create ZIP archive
+        run: |
+          ditto -c -k --keepParent MarkdownViewer.app MarkdownViewer-${{ github.ref_name }}-arm64.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MarkdownViewer-${{ github.ref_name }}-arm64.zip
+          generate_release_notes: true
