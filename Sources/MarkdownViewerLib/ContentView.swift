@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 // MARK: - TOC Entry
 
@@ -69,6 +70,9 @@ struct ToggleTOCKey: FocusedValueKey {
 struct ToggleDiffKey: FocusedValueKey {
     typealias Value = () -> Void
 }
+struct ExportHTMLKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
 struct SetAppearanceKey: FocusedValueKey {
     typealias Value = (String) -> Void
 }
@@ -114,6 +118,10 @@ public extension FocusedValues {
         get { self[ToggleDiffKey.self] }
         set { self[ToggleDiffKey.self] = newValue }
     }
+    var exportHTML: (() -> Void)? {
+        get { self[ExportHTMLKey.self] }
+        set { self[ExportHTMLKey.self] = newValue }
+    }
     var setAppearance: ((String) -> Void)? {
         get { self[SetAppearanceKey.self] }
         set { self[SetAppearanceKey.self] = newValue }
@@ -134,6 +142,7 @@ public struct ContentView: View {
     @State private var navigationTrigger = 0
     @State private var navigationForward = true
     @State private var copyRenderedTrigger = 0
+    @State private var exportHTMLTrigger = 0
     @State private var zoomLevel: Double = 1.0
     @State private var showCopied = false
     @State private var showTOC = false
@@ -180,6 +189,7 @@ public struct ContentView: View {
                     navigationTrigger: navigationTrigger,
                     navigationForward: navigationForward,
                     copyRenderedTrigger: copyRenderedTrigger,
+                    exportHTMLTrigger: exportHTMLTrigger,
                     zoomLevel: zoomLevel,
                     scrollToHeadingTrigger: scrollToHeadingTrigger,
                     scrollToHeadingIndex: scrollToHeadingIndex,
@@ -188,7 +198,8 @@ public struct ContentView: View {
                         matchTotal = total
                         matchCurrent = current
                     },
-                    onCopyDone: { showCopiedToast() }
+                    onCopyDone: { showCopiedToast() },
+                    onExportHTML: { html in saveHTMLFile(html) }
                 )
             }
         }
@@ -231,12 +242,19 @@ public struct ContentView: View {
                 }
                 .help("Copy HTML (Cmd+Option+C)")
             }
+            ToolbarItem(placement: .automatic) {
+                Button(action: exportHTML) {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .help("Export HTML (Cmd+E)")
+            }
         }
         .focusedValue(\.toggleSearch, toggleSearch)
         .focusedValue(\.findNext, findNext)
         .focusedValue(\.findPrevious, findPrevious)
         .focusedValue(\.copySource, copySource)
         .focusedValue(\.copyRendered, copyRendered)
+        .focusedValue(\.exportHTML, exportHTML)
         .focusedValue(\.zoomIn, { zoomLevel = min(zoomLevel + 0.1, 3.0) })
         .focusedValue(\.zoomOut, { zoomLevel = max(zoomLevel - 0.1, 0.5) })
         .focusedValue(\.zoomReset, { zoomLevel = 1.0 })
@@ -415,6 +433,31 @@ public struct ContentView: View {
 
     private func copyRendered() {
         copyRenderedTrigger += 1
+    }
+
+    private func exportHTML() {
+        exportHTMLTrigger += 1
+    }
+
+    private func saveHTMLFile(_ html: String) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.html]
+        panel.canCreateDirectories = true
+        if let url = fileURL {
+            panel.directoryURL = url.deletingLastPathComponent()
+            panel.nameFieldStringValue = url.deletingPathExtension().lastPathComponent + ".html"
+        } else {
+            panel.nameFieldStringValue = "export.html"
+        }
+        panel.begin { response in
+            guard response == .OK, let saveURL = panel.url else { return }
+            do {
+                try html.write(to: saveURL, atomically: true, encoding: .utf8)
+                showCopiedToast()
+            } catch {
+                NSAlert(error: error).runModal()
+            }
+        }
     }
 
     private func showCopiedToast() {

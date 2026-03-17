@@ -211,6 +211,31 @@
             window.webkit.messageHandlers.copyRendered.postMessage(html);
         }
     }
+
+    // Export as standalone HTML file
+    async function exportHTMLContent() {
+        var clone = await prepareCleanContent();
+
+        var styles = '';
+        for (var i = 0; i < document.styleSheets.length; i++) {
+            try {
+                var rules = document.styleSheets[i].cssRules;
+                for (var j = 0; j < rules.length; j++) {
+                    styles += rules[j].cssText + '\n';
+                }
+            } catch(e) {}
+        }
+
+        var html = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>\n'
+            + styles
+            + '</style>\n</head>\n<body>\n<article class="markdown-body">\n'
+            + clone.innerHTML
+            + '\n</article>\n</body>\n</html>';
+
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.exportHTML) {
+            window.webkit.messageHandlers.exportHTML.postMessage(html);
+        }
+    }
     </script>
 
     <script>

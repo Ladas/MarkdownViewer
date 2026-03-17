@@ -11,6 +11,7 @@ struct MarkdownViewerApp: App {
     @FocusedValue(\.zoomIn) var zoomIn
     @FocusedValue(\.zoomOut) var zoomOut
     @FocusedValue(\.zoomReset) var zoomReset
+    @FocusedValue(\.exportHTML) var exportHTML
     @FocusedValue(\.toggleTOC) var toggleTOC
     @FocusedValue(\.toggleDiff) var toggleDiff
     @FocusedValue(\.setAppearance) var setAppearance
@@ -48,6 +49,11 @@ struct MarkdownViewerApp: App {
                     copyRendered?()
                 }
                 .keyboardShortcut("c", modifiers: [.command, .option])
+
+                Button("Export HTML...") {
+                    exportHTML?()
+                }
+                .keyboardShortcut("e", modifiers: .command)
             }
 
             CommandGroup(after: .toolbar) {

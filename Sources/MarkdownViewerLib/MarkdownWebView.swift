@@ -9,17 +9,20 @@ struct MarkdownWebView: NSViewRepresentable {
     var navigationTrigger: Int = 0
     var navigationForward: Bool = true
     var copyRenderedTrigger: Int = 0
+    var exportHTMLTrigger: Int = 0
     var zoomLevel: Double = 1.0
     var scrollToHeadingTrigger: Int = 0
     var scrollToHeadingIndex: Int = -1
     var appearanceMode: String = "auto"
     var onSearchResult: ((Int, Int) -> Void)?
     var onCopyDone: (() -> Void)?
+    var onExportHTML: ((String) -> Void)?
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.userContentController.add(context.coordinator, name: "copyImage")
         config.userContentController.add(context.coordinator, name: "copyRendered")
+        config.userContentController.add(context.coordinator, name: "exportHTML")
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.allowsMagnification = true
@@ -35,6 +38,7 @@ struct MarkdownWebView: NSViewRepresentable {
         let coord = context.coordinator
         coord.onSearchResult = onSearchResult
         coord.onCopyDone = onCopyDone
+        coord.onExportHTML = onExportHTML
 
         let contentChanged = coord.lastMarkdown != markdown || coord.lastOverrideHTML != overrideHTML
         if contentChanged {
@@ -69,6 +73,13 @@ struct MarkdownWebView: NSViewRepresentable {
             webView.evaluateJavaScript("copyRenderedContent()") { _, _ in }
         }
 
+        let exportChanged = coord.lastExportHTMLTrigger != exportHTMLTrigger
+        if exportChanged {
+            coord.lastExportHTMLTrigger = exportHTMLTrigger
+            guard coord.pageLoaded else { return }
+            webView.evaluateJavaScript("exportHTMLContent()") { _, _ in }
+        }
+
         if scrollChanged {
             coord.lastScrollTrigger = scrollToHeadingTrigger
             if scrollToHeadingIndex >= 0 && coord.pageLoaded {
@@ -97,6 +108,7 @@ struct MarkdownWebView: NSViewRepresentable {
         var lastSearchText: String?
         var lastNavTrigger: Int = 0
         var lastCopyRenderedTrigger: Int = 0
+        var lastExportHTMLTrigger: Int = 0
         var lastScrollTrigger: Int = 0
         var lastAppearanceMode: String = "auto"
         var pageLoaded = false
@@ -104,6 +116,7 @@ struct MarkdownWebView: NSViewRepresentable {
         var pendingAppearance: String?
         var onSearchResult: ((Int, Int) -> Void)?
         var onCopyDone: (() -> Void)?
+        var onExportHTML: ((String) -> Void)?
 
         // MARK: - WKScriptMessageHandler
 
@@ -115,6 +128,8 @@ struct MarkdownWebView: NSViewRepresentable {
                 handleCopyImage(message)
             } else if message.name == "copyRendered" {
                 handleCopyRendered(message)
+            } else if message.name == "exportHTML" {
+                handleExportHTML(message)
             }
         }
 
@@ -140,6 +155,11 @@ struct MarkdownWebView: NSViewRepresentable {
             pasteboard.setString(html, forType: .html)
             pasteboard.setString(html, forType: .string)
             onCopyDone?()
+        }
+
+        private func handleExportHTML(_ message: WKScriptMessage) {
+            guard let html = message.body as? String else { return }
+            onExportHTML?(html)
         }
 
         // MARK: - Search
