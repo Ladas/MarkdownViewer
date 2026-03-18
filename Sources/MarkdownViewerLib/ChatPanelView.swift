@@ -129,6 +129,7 @@ struct ChatWebView: NSViewRepresentable {
 
 struct ChatPanelView: View {
     let fileURL: URL?
+    @Binding var pendingPrompt: String?
 
     @State private var messages: [ChatMessage] = []
     @State private var inputText = ""
@@ -230,6 +231,13 @@ struct ChatPanelView: View {
             .background(.bar)
         }
         .onAppear { setupChat() }
+        .onChange(of: pendingPrompt) { _ in
+            if let prompt = pendingPrompt {
+                pendingPrompt = nil
+                inputText = prompt
+                sendMessage()
+            }
+        }
     }
 
     // MARK: - Setup & Actions

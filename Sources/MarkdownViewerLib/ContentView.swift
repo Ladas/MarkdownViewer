@@ -199,6 +199,7 @@ public struct ContentView: View {
     @State private var showChat = false
     @State private var chatPanelHeight: CGFloat = 250
     @State private var chatDragStartHeight: CGFloat? = nil
+    @State private var pendingChatPrompt: String? = nil
     @FocusState private var isSearchFocused: Bool
     @FocusState private var isNoteFocused: Bool
 
@@ -268,12 +269,13 @@ public struct ContentView: View {
                     onCopyDone: { showCopiedToast() },
                     onExportHTML: { html in saveHTMLFile(html) },
                     onEditNote: { index, content in openNoteEditor(index: index, content: content) },
-                    onAddNoteAtHeading: { heading in openNoteEditor(afterHeading: heading) }
+                    onAddNoteAtHeading: { heading in openNoteEditor(afterHeading: heading) },
+                    onExplainWithClaude: { text in explainWithClaude(text) }
                 )
 
                 if showChat {
                     chatDivider
-                    ChatPanelView(fileURL: fileURL)
+                    ChatPanelView(fileURL: fileURL, pendingPrompt: $pendingChatPrompt)
                         .frame(height: chatPanelHeight)
                 }
             }
@@ -905,6 +907,16 @@ public struct ContentView: View {
             diffHTML = GitHelper.diffToHTML(d)
         } else {
             diffHTML = nil
+        }
+    }
+
+    // MARK: - Claude Chat
+
+    private func explainWithClaude(_ selectedText: String) {
+        let prompt = "Explain the following:\n\n```\n\(selectedText)\n```"
+        pendingChatPrompt = prompt
+        if !showChat {
+            showChat = true
         }
     }
 
