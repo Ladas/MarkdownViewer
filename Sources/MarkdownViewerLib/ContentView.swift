@@ -491,99 +491,12 @@ public struct ContentView: View {
 
     private var commentsPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Comments")
-                    .font(.headline)
-                Spacer()
-                if !resolvedNotes.isEmpty {
-                    Button("Clear Resolved") {
-                        resolvedNotes.removeAll()
-                    }
-                    .font(.caption)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-
+            commentsPanelHeader
             Divider()
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
-                    if !activeNotes.isEmpty {
-                        Text("Active (\(activeNotes.count))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 8)
-
-                        ForEach(Array(activeNotes.enumerated()), id: \.offset) { index, note in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(note)
-                                    .font(.system(size: 11))
-                                    .lineLimit(3)
-                                HStack(spacing: 4) {
-                                    Button("Edit") {
-                                        openNoteEditor(index: index, content: note)
-                                    }
-                                    .font(.caption2)
-                                    Button("Delete") {
-                                        deleteNoteAt(index)
-                                    }
-                                    .font(.caption2)
-                                    .foregroundStyle(.red)
-                                }
-                            }
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.accentColor.opacity(0.08))
-                            .cornerRadius(6)
-                            .padding(.horizontal, 8)
-                        }
-                    }
-
-                    if !resolvedNotes.isEmpty {
-                        Text("Resolved (\(resolvedNotes.flatMap(\.notes).count))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.top, activeNotes.isEmpty ? 0 : 8)
-
-                        ForEach(resolvedNotes) { batch in
-                            VStack(alignment: .leading, spacing: 4) {
-                                ForEach(batch.notes, id: \.self) { note in
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(.green)
-                                            .font(.caption)
-                                        Text(note)
-                                            .font(.system(size: 11))
-                                            .lineLimit(2)
-                                            .strikethrough()
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                Text(batch.resolvedAt, style: .relative)
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                                if !batch.diff.isEmpty {
-                                    DisclosureGroup("View Diff") {
-                                        Text(batch.diff)
-                                            .font(.system(size: 10, design: .monospaced))
-                                            .foregroundStyle(.secondary)
-                                            .textSelection(.enabled)
-                                    }
-                                    .font(.caption2)
-                                }
-                            }
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.green.opacity(0.05))
-                            .cornerRadius(6)
-                            .padding(.horizontal, 8)
-                        }
-                    }
-
+                    activeNotesSection
+                    resolvedNotesSection
                     if activeNotes.isEmpty && resolvedNotes.isEmpty {
                         Text("No review notes yet.\nCmd+double-click to add one.")
                             .font(.caption)
@@ -596,6 +509,112 @@ public struct ContentView: View {
         }
         .frame(width: 260)
         .background(.background)
+    }
+
+    private var commentsPanelHeader: some View {
+        HStack {
+            Text("Comments")
+                .font(.headline)
+            Spacer()
+            if !resolvedNotes.isEmpty {
+                Button("Clear Resolved") {
+                    resolvedNotes.removeAll()
+                }
+                .font(.caption)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private var activeNotesSection: some View {
+        if !activeNotes.isEmpty {
+            Text("Active (\(activeNotes.count))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+
+            ForEach(Array(activeNotes.enumerated()), id: \.offset) { index, note in
+                activeNoteCard(index: index, note: note)
+            }
+        }
+    }
+
+    private func activeNoteCard(index: Int, note: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(note)
+                .font(.system(size: 11))
+                .lineLimit(3)
+            HStack(spacing: 4) {
+                Button("Edit") { openNoteEditor(index: index, content: note) }
+                    .font(.caption2)
+                Button("Delete") { deleteNoteAt(index) }
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.08))
+        .cornerRadius(6)
+        .padding(.horizontal, 8)
+    }
+
+    @ViewBuilder
+    private var resolvedNotesSection: some View {
+        if !resolvedNotes.isEmpty {
+            Text("Resolved (\(resolvedNotes.flatMap(\.notes).count))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.top, activeNotes.isEmpty ? 0 : 8)
+
+            ForEach(resolvedNotes) { batch in
+                resolvedBatchCard(batch: batch)
+            }
+        }
+    }
+
+    private func resolvedBatchCard(batch: ResolvedBatch) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(batch.notes, id: \.self) { note in
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.caption)
+                    Text(note)
+                        .font(.system(size: 11))
+                        .lineLimit(2)
+                        .strikethrough()
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Text(batch.resolvedAt, style: .relative)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            if !batch.diff.isEmpty {
+                DisclosureGroup {
+                    Text(batch.diff)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                } label: {
+                    Text("View Diff")
+                        .font(.caption2)
+                        .foregroundColor(.accentColor)
+                        .underline()
+                }
+                .tint(.accentColor)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.green.opacity(0.05))
+        .cornerRadius(6)
+        .padding(.horizontal, 8)
     }
 
     private func deleteNoteAt(_ index: Int) {

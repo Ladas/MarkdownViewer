@@ -59,21 +59,7 @@ Biological swarm systems exhibit these properties:
 - **Stigmergy** — indirect communication through environmental modification
 - **Positive feedback** — successful strategies amplified through the swarm
 - **Negative feedback** — unsuccessful paths naturally pruned
-- **Redundancy** — individual failure doesn't collapse the system
-
-
-
-```review
-rename maybe?
-```
-
-
-
-```review
-test
-```
-
-### 2.3 Comparison of Approaches
+- **Redundancy** — individual failure doesn't collapse the system### 2.3 Comparison of Approaches
 
 | Approach | Agents | Communication | Emergent Behavior | Scalability |
 |----------|--------|---------------|-------------------|-------------|
@@ -514,20 +500,6 @@ async function orchestrate(task: string): Promise<string> {
 | **Orchestrator** | Central coordination agent that decomposes and routes tasks |
 | **Consensus** | Agreement protocol among multiple agents |
 
----
-
-```review
-This document covers the core architecture well. Consider adding:
-1. Real latency measurements from the prototype
-2. Comparison with OpenAI Swarm framework
-3. Cost analysis per task at different swarm sizes
-```
-
----
+------
 
 *Document generated for MarkdownViewer rendering test — covers tables, mermaid (flowchart, sequence, state, mindmap, pie, xychart, gantt), code blocks, task lists, math, blockquotes, badges, and review notes.*
-
-
-```review
-I rename this
-```
