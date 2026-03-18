@@ -42,7 +42,10 @@
             var pre = el.parentElement;
             var div = document.createElement('pre');
             div.className = 'mermaid';
+            // Use textContent to safely escape HTML, then replace \n with <br/>
+            // for line break support in labels (GitHub compat)
             div.textContent = el.textContent;
+            div.innerHTML = div.innerHTML.replace(/\\n/g, '<br/>');
             pre.replaceWith(div);
         });
 
@@ -472,36 +475,8 @@
         }
     });
 
-    // Re-render mermaid diagrams with a new theme
-    function rerenderMermaid(theme) {
-        if (typeof mermaid === 'undefined') return;
-        // Reset mermaid IDs and re-render
-        document.querySelectorAll('.mermaid-container').forEach(function(container) {
-            var pre = container.querySelector('pre.mermaid');
-            if (!pre) return;
-            var svg = pre.querySelector('svg');
-            if (svg) svg.remove();
-            pre.removeAttribute('data-processed');
-            container.parentNode.insertBefore(pre, container);
-            container.remove();
-        });
-        document.querySelectorAll('pre.mermaid[data-processed]').forEach(function(pre) {
-            var svg = pre.querySelector('svg');
-            if (svg) svg.remove();
-            pre.removeAttribute('data-processed');
-        });
-        mermaid.initialize({
-            startOnLoad: false,
-            theme: theme,
-            securityLevel: 'loose',
-            flowchart: { htmlLabels: true, useMaxWidth: true },
-            sequence: { useMaxWidth: true },
-            gantt: { useMaxWidth: true }
-        });
-        mermaid.run()
-            .then(addDiagramCopyButtons)
-            .catch(function(e) { console.error('Mermaid re-render error:', e); });
-    }
+    // Mermaid theme change requires full page reload (SVGs have baked-in colors)
+    // The Swift side triggers a content reload which preserves scroll position
 
     // Content width control
     function setContentWidth(px) {

@@ -117,10 +117,14 @@ struct MarkdownWebView: NSViewRepresentable {
             case "dark": webView.appearance = NSAppearance(named: .darkAqua)
             default: webView.appearance = nil
             }
-            // Re-render mermaid with correct theme
+            // Force full reload so mermaid re-renders with correct theme
             if coord.pageLoaded {
-                let theme = appearanceMode == "dark" ? "dark" : (appearanceMode == "light" ? "default" : (webView.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? "dark" : "default"))
-                webView.evaluateJavaScript("rerenderMermaid('\(theme)')") { _, _ in }
+                coord.pageLoaded = false
+                let htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
+                webView.evaluateJavaScript("window.scrollY") { result, _ in
+                    coord.savedScrollY = result as? Double ?? 0
+                    webView.loadHTMLString(htmlToLoad, baseURL: nil)
+                }
             }
         }
 
@@ -274,12 +278,11 @@ struct MarkdownWebView: NSViewRepresentable {
                 pendingSearch = nil
                 performSearch(search, in: webView)
             }
-            if lastAppearanceMode != "auto" {
-                switch lastAppearanceMode {
-                case "light": webView.appearance = NSAppearance(named: .aqua)
-                case "dark": webView.appearance = NSAppearance(named: .darkAqua)
-                default: break
-                }
+            // Re-apply appearance after page reload
+            switch lastAppearanceMode {
+            case "light": webView.appearance = NSAppearance(named: .aqua)
+            case "dark": webView.appearance = NSAppearance(named: .darkAqua)
+            default: webView.appearance = nil
             }
         }
 
