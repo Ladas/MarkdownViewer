@@ -185,6 +185,28 @@ struct InsertTests {
     }
 }
 
+@Suite("ReviewNote - Sanitize")
+struct SanitizeTests {
+
+    @Test func sanitizesBackticks() {
+        let content = "Has ``` backticks"
+        let sanitized = ReviewNote.sanitizeContent(content)
+        #expect(!sanitized.contains("```"))
+        #expect(sanitized.contains("` ` `"))
+    }
+
+    @Test func noChangeWithoutBackticks() {
+        let content = "Normal review content"
+        #expect(ReviewNote.sanitizeContent(content) == content)
+    }
+
+    @Test func multipleBacktickSequences() {
+        let content = "Before ``` middle ``` after"
+        let sanitized = ReviewNote.sanitizeContent(content)
+        #expect(!sanitized.contains("```"))
+    }
+}
+
 @Suite("ReviewNote - Roundtrip")
 struct RoundtripTests {
 

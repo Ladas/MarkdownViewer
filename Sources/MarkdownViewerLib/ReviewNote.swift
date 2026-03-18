@@ -2,11 +2,21 @@ import Foundation
 
 public enum ReviewNote {
 
+    private static let blockRegex: NSRegularExpression = {
+        try! NSRegularExpression(pattern: "```review\\n[\\s\\S]*?\\n```")
+    }()
+
+    private static let extractRegex: NSRegularExpression = {
+        try! NSRegularExpression(pattern: "```review\\n([\\s\\S]*?)\\n```")
+    }()
+
+    public static func sanitizeContent(_ content: String) -> String {
+        content.replacingOccurrences(of: "```", with: "` ` `")
+    }
+
     public static func extract(from markdown: String) -> [String] {
-        let pattern = "```review\\n([\\s\\S]*?)\\n```"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         let nsText = markdown as NSString
-        let matches = regex.matches(in: markdown, range: NSRange(location: 0, length: nsText.length))
+        let matches = extractRegex.matches(in: markdown, range: NSRange(location: 0, length: nsText.length))
         return matches.compactMap { match in
             guard match.numberOfRanges > 1 else { return nil }
             return nsText.substring(with: match.range(at: 1))
@@ -14,10 +24,8 @@ public enum ReviewNote {
     }
 
     public static func replace(at index: Int, with newContent: String?, in text: String) -> String {
-        let pattern = "```review\\n[\\s\\S]*?\\n```"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
         let nsText = text as NSString
-        let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
+        let matches = blockRegex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
         guard index < matches.count else { return text }
 
         let match = matches[index]

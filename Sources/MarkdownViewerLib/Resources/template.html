@@ -63,12 +63,7 @@
             editBtn.textContent = 'Edit';
             editBtn.onclick = function(e) {
                 e.stopPropagation();
-                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.editNote) {
-                    window.webkit.messageHandlers.editNote.postMessage({
-                        index: idx,
-                        content: content.textContent
-                    });
-                }
+                postToHandler('editNote', { index: idx, content: content.textContent });
             };
             div.appendChild(editBtn);
 
@@ -141,9 +136,7 @@
             btn.onclick = function(e) {
                 e.stopPropagation();
                 svgToPngDataUrl(svg).then(function(pngUrl) {
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyImage) {
-                        window.webkit.messageHandlers.copyImage.postMessage(pngUrl);
-                    }
+                    postToHandler('copyImage', pngUrl);
                     btn.textContent = 'Copied!';
                     setTimeout(function() { btn.textContent = 'Copy diagram'; }, 1500);
                 }).catch(function() {
@@ -224,11 +217,10 @@
         return clone;
     }
 
-    // Copy rendered content as standalone HTML (with CSS inlined, mermaid as PNG)
-    async function copyRenderedContent() {
+    // Build standalone HTML from rendered content
+    async function buildStandaloneHTML() {
         var clone = await prepareCleanContent();
 
-        // Collect CSS from all stylesheets
         var styles = '';
         for (var i = 0; i < document.styleSheets.length; i++) {
             try {
@@ -239,40 +231,25 @@
             } catch(e) {}
         }
 
-        var html = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>\n'
+        return '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>\n'
             + styles
             + '</style>\n</head>\n<body>\n<article class="markdown-body">\n'
             + clone.innerHTML
             + '\n</article>\n</body>\n</html>';
+    }
 
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyRendered) {
-            window.webkit.messageHandlers.copyRendered.postMessage(html);
+    function postToHandler(name, body) {
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[name]) {
+            window.webkit.messageHandlers[name].postMessage(body);
         }
     }
 
-    // Export as standalone HTML file
+    async function copyRenderedContent() {
+        postToHandler('copyRendered', await buildStandaloneHTML());
+    }
+
     async function exportHTMLContent() {
-        var clone = await prepareCleanContent();
-
-        var styles = '';
-        for (var i = 0; i < document.styleSheets.length; i++) {
-            try {
-                var rules = document.styleSheets[i].cssRules;
-                for (var j = 0; j < rules.length; j++) {
-                    styles += rules[j].cssText + '\n';
-                }
-            } catch(e) {}
-        }
-
-        var html = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>\n'
-            + styles
-            + '</style>\n</head>\n<body>\n<article class="markdown-body">\n'
-            + clone.innerHTML
-            + '\n</article>\n</body>\n</html>';
-
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.exportHTML) {
-            window.webkit.messageHandlers.exportHTML.postMessage(html);
-        }
+        postToHandler('exportHTML', await buildStandaloneHTML());
     }
     </script>
 
@@ -442,11 +419,7 @@
             node = node.parentElement;
         }
 
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.addNoteAtHeading) {
-            window.webkit.messageHandlers.addNoteAtHeading.postMessage({
-                heading: headingText
-            });
-        }
+        postToHandler('addNoteAtHeading', { heading: headingText });
     });
 
     // Content width control

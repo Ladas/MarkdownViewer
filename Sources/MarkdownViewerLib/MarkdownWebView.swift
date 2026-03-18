@@ -72,7 +72,10 @@ struct MarkdownWebView: NSViewRepresentable {
             coord.navigateSearch(navigationForward ? "next" : "prev", in: webView)
         }
 
-        webView.pageZoom = zoomLevel
+        if coord.lastZoomLevel != zoomLevel {
+            coord.lastZoomLevel = zoomLevel
+            webView.pageZoom = zoomLevel
+        }
 
         if copyChanged {
             coord.lastCopyRenderedTrigger = copyRenderedTrigger
@@ -124,6 +127,7 @@ struct MarkdownWebView: NSViewRepresentable {
         var lastCopyRenderedTrigger: Int = 0
         var lastExportHTMLTrigger: Int = 0
         var lastScrollTrigger: Int = 0
+        var lastZoomLevel: Double = 1.0
         var lastAppearanceMode: String = "auto"
         var lastContentWidth: Double = 980
         var pageLoaded = false
@@ -254,6 +258,11 @@ struct MarkdownWebView: NSViewRepresentable {
         ) {
             if navigationAction.navigationType == .linkActivated,
                let url = navigationAction.request.url {
+                // Allow anchor links (fragment-only) to scroll within the page
+                if url.fragment != nil && (url.scheme == nil || url.scheme == "about") {
+                    decisionHandler(.allow)
+                    return
+                }
                 if let scheme = url.scheme?.lowercased(),
                    Self.allowedSchemes.contains(scheme) {
                     NSWorkspace.shared.open(url)

@@ -177,9 +177,7 @@ public struct ContentView: View {
         self._currentText = State(initialValue: document.text)
     }
 
-    private var tocEntries: [TOCEntry] {
-        TOCEntry.parse(from: currentText)
-    }
+    @State private var tocEntries: [TOCEntry] = []
 
     public var body: some View {
         HStack(spacing: 0) {
@@ -251,6 +249,7 @@ public struct ContentView: View {
             if showSearch { dismissSearch() }
         }
         .onAppear {
+            tocEntries = TOCEntry.parse(from: currentText)
             startFileWatcher()
             checkGitRepo()
         }
@@ -259,6 +258,7 @@ public struct ContentView: View {
             fileWatcher = nil
         }
         .onChange(of: currentText) { _ in
+            tocEntries = TOCEntry.parse(from: currentText)
             if showDiff { updateDiff() }
         }
         .sheet(isPresented: $showNoteEditor) {
@@ -301,10 +301,7 @@ public struct ContentView: View {
 
             HStack {
                 Button("Cancel") {
-                    showNoteEditor = false
-                    noteContent = ""
-                    editingNoteIndex = nil
-                    insertAfterHeading = nil
+                    dismissNoteEditor()
                 }
                 .keyboardShortcut(.cancelAction)
 
@@ -607,6 +604,13 @@ public struct ContentView: View {
 
     // MARK: - Review Notes
 
+    private func dismissNoteEditor() {
+        showNoteEditor = false
+        noteContent = ""
+        editingNoteIndex = nil
+        insertAfterHeading = nil
+    }
+
     private func openNoteEditor(index: Int? = nil, content: String = "", afterHeading: String? = nil) {
         editingNoteIndex = index
         noteContent = content
@@ -619,11 +623,12 @@ public struct ContentView: View {
         let trimmed = noteContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        let sanitized = ReviewNote.sanitizeContent(trimmed)
         var content = currentText
-        let noteBlock = "\n\n```review\n\(trimmed)\n```\n"
+        let noteBlock = "\n\n```review\n\(sanitized)\n```\n"
 
         if let index = editingNoteIndex {
-            content = ReviewNote.replace(at: index, with: trimmed, in: content)
+            content = ReviewNote.replace(at: index, with: sanitized, in: content)
         } else if let heading = insertAfterHeading, !heading.isEmpty {
             content = ReviewNote.insertAfterHeading(heading, note: noteBlock, in: content)
         } else {
@@ -631,22 +636,14 @@ public struct ContentView: View {
         }
 
         try? content.write(to: url, atomically: true, encoding: .utf8)
-
-        showNoteEditor = false
-        noteContent = ""
-        editingNoteIndex = nil
-        insertAfterHeading = nil
+        dismissNoteEditor()
     }
 
     private func deleteNote() {
         guard let url = fileURL, let index = editingNoteIndex else { return }
         let content = ReviewNote.replace(at: index, with: nil, in: currentText)
         try? content.write(to: url, atomically: true, encoding: .utf8)
-
-        showNoteEditor = false
-        noteContent = ""
-        editingNoteIndex = nil
-        insertAfterHeading = nil
+        dismissNoteEditor()
     }
 
     // MARK: - File Watcher
