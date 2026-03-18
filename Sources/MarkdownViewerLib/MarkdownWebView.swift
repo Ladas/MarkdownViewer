@@ -112,9 +112,10 @@ struct MarkdownWebView: NSViewRepresentable {
 
         if coord.lastAppearanceMode != appearanceMode {
             coord.lastAppearanceMode = appearanceMode
-            if coord.pageLoaded {
-                let escaped = appearanceMode.replacingOccurrences(of: "'", with: "\\'")
-                webView.evaluateJavaScript("setAppearance('\(escaped)')") { _, _ in }
+            switch appearanceMode {
+            case "light": webView.appearance = NSAppearance(named: .aqua)
+            case "dark": webView.appearance = NSAppearance(named: .darkAqua)
+            default: webView.appearance = nil
             }
         }
 
@@ -269,8 +270,11 @@ struct MarkdownWebView: NSViewRepresentable {
                 performSearch(search, in: webView)
             }
             if lastAppearanceMode != "auto" {
-                let escaped = lastAppearanceMode.replacingOccurrences(of: "'", with: "\\'")
-                webView.evaluateJavaScript("setAppearance('\(escaped)')") { _, _ in }
+                switch lastAppearanceMode {
+                case "light": webView.appearance = NSAppearance(named: .aqua)
+                case "dark": webView.appearance = NSAppearance(named: .darkAqua)
+                default: break
+                }
             }
         }
 
