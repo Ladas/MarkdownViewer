@@ -424,15 +424,17 @@ public struct ContentView: View {
             actionButton("Contents", icon: "list.bullet.indent", active: showTOC) {
                 showTOC.toggle()
             }
+            .help("Toggle table of contents sidebar (Ctrl+Cmd+T)")
             if isGitRepo {
                 actionButton("Diff", icon: "arrow.left.arrow.right", active: showDiff) {
                     toggleDiff()
                 }
+                .help("Compare file against last commit or remote (Cmd+D)")
             }
             actionButton("Note", icon: "plus.bubble") {
                 openNoteEditor()
             }
-            .help("Add review note (Cmd+Shift+N or Cmd+double-click)")
+            .help("Add a review note — saved as ```review block in the file (Cmd+Shift+N)")
 
             Spacer()
 
@@ -463,13 +465,19 @@ public struct ContentView: View {
             actionButton(commentsButtonLabel, icon: "bubble.left.and.bubble.right", active: showComments) {
                 showComments.toggle()
             }
-            .help("Toggle comments panel")
+            .help("Show/hide review comments panel with active and resolved notes")
+            if let url = fileURL {
+                actionButton("Agent", icon: "arrow.up.doc.on.clipboard") {
+                    copyAgentPrompt(url: url)
+                }
+                .help("Copy file path and review note instructions for your AI agent")
+            }
             actionButton("MD", icon: "doc.on.doc") { copySource() }
-                .help("Copy markdown source")
+                .help("Copy raw markdown source to clipboard (Cmd+Shift+C)")
             actionButton("HTML", icon: "doc.richtext") { copyRendered() }
-                .help("Copy as HTML")
+                .help("Copy as standalone HTML with CSS and diagrams as PNG (Cmd+Option+C)")
             actionButton("Export", icon: "square.and.arrow.up") { exportHTML() }
-                .help("Export HTML file")
+                .help("Save as standalone HTML file (Cmd+E)")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -775,6 +783,24 @@ public struct ContentView: View {
 
     private func exportHTML() {
         exportHTMLTrigger += 1
+    }
+
+    private func copyAgentPrompt(url: URL) {
+        let noteCount = activeNotes.count
+        let prompt = """
+        Read the file at: \(url.path)
+
+        This file contains \(noteCount) review note\(noteCount == 1 ? "" : "s") marked as fenced code blocks with the language tag `review`. They look like this:
+
+        ```review
+        The reviewer's feedback or request goes here.
+        ```
+
+        Find all ```review blocks in the file, address each one, then remove the block once resolved. Keep the rest of the document intact.
+        """
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(prompt, forType: .string)
+        showCopiedToast()
     }
 
     private func saveHTMLFile(_ html: String) {
