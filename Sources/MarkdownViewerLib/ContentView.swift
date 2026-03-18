@@ -313,7 +313,7 @@ public struct ContentView: View {
                 .frame(minHeight: 120)
                 .focused($isNoteFocused)
 
-            Text("Tip: Press Fn twice or the microphone key to start voice dictation")
+            Text("Tip: Cmd+double-click in the document to add a note at that section. Press Fn twice for voice dictation.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
 
@@ -385,30 +385,17 @@ public struct ContentView: View {
     // MARK: - Action Bar
 
     private var actionBar: some View {
-        HStack(spacing: 4) {
-            if let url = fileURL {
-                Button(action: {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(url.path, forType: .string)
-                    showCopiedToast()
-                }) {
-                    Text(url.lastPathComponent)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.plain)
-                .help("Click to copy path: \(url.path)")
-            }
-
+        HStack(spacing: 6) {
+            // View mode
             Picker("", selection: $viewMode) {
                 ForEach(ViewMode.allCases, id: \.self) { mode in
                     Text(mode.rawValue).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
-            .frame(width: 180)
+            .frame(width: 220)
 
+            // Navigation
             actionButton("Contents", icon: "list.bullet.indent", active: showTOC) {
                 showTOC.toggle()
             }
@@ -417,41 +404,40 @@ public struct ContentView: View {
                     toggleDiff()
                 }
             }
-
-            actionButton("Add Note", icon: "plus.bubble") {
+            actionButton("Note", icon: "plus.bubble") {
                 openNoteEditor()
             }
-            actionButton("Voice", icon: voiceInputEnabled ? "mic.fill" : "mic", active: voiceInputEnabled) {
-                voiceInputEnabled.toggle()
-            }
+            .help("Add review note (or Cmd+double-click in document)")
 
             Spacer()
 
-            Text("Cmd+dblclick to comment")
-                .font(.system(size: 9))
-                .foregroundStyle(.tertiary)
-
-            Image(systemName: "arrow.left.and.right")
-                .font(.system(size: 9))
-                .foregroundStyle(.secondary)
+            // Width slider
             Slider(value: $contentWidth, in: 400...2400, step: 20)
-                .frame(width: 80)
+                .frame(width: 70)
                 .controlSize(.mini)
                 .help("Content width: \(Int(contentWidth))px")
-            Text("\(Int(contentWidth))")
-                .font(.system(size: 9).monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 28, alignment: .leading)
 
-            actionButton("Copy MD", icon: "doc.on.doc") {
+            // Copy/export
+            if let url = fileURL {
+                actionButton("Path", icon: "doc.on.clipboard") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url.path, forType: .string)
+                    showCopiedToast()
+                }
+                .help(url.path)
+            }
+            actionButton("MD", icon: "doc.on.doc") {
                 copySource()
             }
-            actionButton("Copy HTML", icon: "doc.richtext") {
+            .help("Copy markdown source")
+            actionButton("HTML", icon: "doc.richtext") {
                 copyRendered()
             }
-            actionButton("Export HTML", icon: "square.and.arrow.up") {
+            .help("Copy as HTML")
+            actionButton("Export", icon: "square.and.arrow.up") {
                 exportHTML()
             }
+            .help("Export HTML file")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
