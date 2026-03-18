@@ -39,6 +39,41 @@
             pre.replaceWith(div);
         });
 
+        // Render review note blocks as styled callouts with Edit button
+        var _reviewIndex = 0;
+        document.querySelectorAll('code.language-review').forEach(function(el) {
+            var pre = el.parentElement;
+            var div = document.createElement('div');
+            div.className = 'review-note';
+            var idx = _reviewIndex++;
+
+            var label = document.createElement('span');
+            label.className = 'review-note-label';
+            label.textContent = 'Review Note';
+            div.appendChild(label);
+
+            var content = document.createElement('div');
+            content.className = 'review-note-content';
+            content.textContent = el.textContent;
+            div.appendChild(content);
+
+            var editBtn = document.createElement('button');
+            editBtn.className = 'review-note-edit';
+            editBtn.textContent = 'Edit';
+            editBtn.onclick = function(e) {
+                e.stopPropagation();
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.editNote) {
+                    window.webkit.messageHandlers.editNote.postMessage({
+                        index: idx,
+                        content: content.textContent
+                    });
+                }
+            };
+            div.appendChild(editBtn);
+
+            pre.replaceWith(div);
+        });
+
         if (typeof mermaid !== 'undefined') {
             mermaid.initialize({
                 startOnLoad: false,
@@ -377,6 +412,39 @@
             headings[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
+
+    // Cmd+double-click to add a review note at nearest heading
+    document.addEventListener('dblclick', function(e) {
+        if (!e.metaKey) return;
+        e.preventDefault();
+
+        // Find the nearest preceding heading
+        var node = e.target;
+        var headingText = '';
+        while (node && node !== document.body) {
+            if (/^H[1-6]$/.test(node.tagName)) {
+                headingText = node.textContent;
+                break;
+            }
+            // Check previous siblings for headings
+            var prev = node.previousElementSibling;
+            while (prev) {
+                if (/^H[1-6]$/.test(prev.tagName)) {
+                    headingText = prev.textContent;
+                    break;
+                }
+                prev = prev.previousElementSibling;
+            }
+            if (headingText) break;
+            node = node.parentElement;
+        }
+
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.addNoteAtHeading) {
+            window.webkit.messageHandlers.addNoteAtHeading.postMessage({
+                heading: headingText
+            });
+        }
+    });
 
     // Appearance override
     function setAppearance(mode) {

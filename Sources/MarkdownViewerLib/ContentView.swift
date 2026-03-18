@@ -73,6 +73,9 @@ struct ToggleDiffKey: FocusedValueKey {
 struct ExportHTMLKey: FocusedValueKey {
     typealias Value = () -> Void
 }
+struct AddNoteKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
 struct SetAppearanceKey: FocusedValueKey {
     typealias Value = (String) -> Void
 }
@@ -122,6 +125,10 @@ public extension FocusedValues {
         get { self[ExportHTMLKey.self] }
         set { self[ExportHTMLKey.self] = newValue }
     }
+    var addNote: (() -> Void)? {
+        get { self[AddNoteKey.self] }
+        set { self[AddNoteKey.self] = newValue }
+    }
     var setAppearance: ((String) -> Void)? {
         get { self[SetAppearanceKey.self] }
         set { self[SetAppearanceKey.self] = newValue }
@@ -155,7 +162,13 @@ public struct ContentView: View {
     @State private var scrollToHeadingIndex = -1
     @State private var fileWatcher: FileWatcher?
     @State private var appearanceMode = "auto"
+    @State private var showNoteEditor = false
+    @State private var noteContent = ""
+    @State private var editingNoteIndex: Int?
+    @State private var insertAfterHeading: String?
+    @State private var voiceInputEnabled = false
     @FocusState private var isSearchFocused: Bool
+    @FocusState private var isNoteFocused: Bool
 
     public init(document: MarkdownDocument, fileURL: URL? = nil) {
         self.document = document
@@ -201,7 +214,9 @@ public struct ContentView: View {
                         matchCurrent = current
                     },
                     onCopyDone: { showCopiedToast() },
-                    onExportHTML: { html in saveHTMLFile(html) }
+                    onExportHTML: { html in saveHTMLFile(html) },
+                    onEditNote: { index, content in openNoteEditor(index: index, content: content) },
+                    onAddNoteAtHeading: { heading in openNoteEditor(afterHeading: heading) }
                 )
             }
         }
@@ -223,6 +238,7 @@ public struct ContentView: View {
         .focusedValue(\.copySource, copySource)
         .focusedValue(\.copyRendered, copyRendered)
         .focusedValue(\.exportHTML, exportHTML)
+        .focusedValue(\.addNote, { openNoteEditor() })
         .focusedValue(\.zoomIn, { zoomLevel = min(zoomLevel + 0.1, 3.0) })
         .focusedValue(\.zoomOut, { zoomLevel = max(zoomLevel - 0.1, 0.5) })
         .focusedValue(\.zoomReset, { zoomLevel = 1.0 })
@@ -242,6 +258,74 @@ public struct ContentView: View {
         }
         .onChange(of: currentText) { _ in
             if showDiff { updateDiff() }
+        }
+        .sheet(isPresented: $showNoteEditor) {
+            noteEditorSheet
+        }
+    }
+
+    // MARK: - Note Editor Sheet
+
+    private var noteEditorSheet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(editingNoteIndex != nil ? "Edit Review Note" : "New Review Note")
+                    .font(.headline)
+                Spacer()
+                if voiceInputEnabled {
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                    Text("Voice input enabled")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let heading = insertAfterHeading, !heading.isEmpty {
+                Text("After: \(heading)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            TextEditor(text: $noteContent)
+                .font(.body)
+                .frame(minHeight: 120)
+                .focused($isNoteFocused)
+
+            Text("Tip: Press Fn twice or the microphone key to start voice dictation")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+            HStack {
+                Button("Cancel") {
+                    showNoteEditor = false
+                    noteContent = ""
+                    editingNoteIndex = nil
+                    insertAfterHeading = nil
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Delete Note") {
+                    deleteNote()
+                }
+                .foregroundStyle(.red)
+                .opacity(editingNoteIndex != nil ? 1 : 0)
+                .disabled(editingNoteIndex == nil)
+
+                Button("Save") {
+                    saveNote()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(noteContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 500, minHeight: 250)
+        .onAppear {
+            isNoteFocused = true
         }
     }
 
@@ -292,6 +376,13 @@ public struct ContentView: View {
                 actionButton("Git Diff", icon: "arrow.left.arrow.right", active: showDiff) {
                     toggleDiff()
                 }
+            }
+
+            actionButton("Add Note", icon: "plus.bubble") {
+                openNoteEditor()
+            }
+            actionButton("Voice", icon: voiceInputEnabled ? "mic.fill" : "mic", active: voiceInputEnabled) {
+                voiceInputEnabled.toggle()
             }
 
             Spacer()
@@ -498,6 +589,124 @@ public struct ContentView: View {
         } else {
             diffHTML = nil
         }
+    }
+
+    // MARK: - Review Notes
+
+    private func openNoteEditor(index: Int? = nil, content: String = "", afterHeading: String? = nil) {
+        editingNoteIndex = index
+        noteContent = content
+        insertAfterHeading = afterHeading
+        showNoteEditor = true
+    }
+
+    private func saveNote() {
+        guard let url = fileURL else { return }
+        let trimmed = noteContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        var content = currentText
+        let noteBlock = "\n\n```review\n\(trimmed)\n```\n"
+
+        if let index = editingNoteIndex {
+            content = replaceReviewBlock(at: index, with: trimmed, in: content)
+        } else if let heading = insertAfterHeading, !heading.isEmpty {
+            content = insertAfterHeadingText(heading, note: noteBlock, in: content)
+        } else {
+            content += noteBlock
+        }
+
+        try? content.write(to: url, atomically: true, encoding: .utf8)
+
+        showNoteEditor = false
+        noteContent = ""
+        editingNoteIndex = nil
+        insertAfterHeading = nil
+    }
+
+    private func deleteNote() {
+        guard let url = fileURL, let index = editingNoteIndex else { return }
+        let content = replaceReviewBlock(at: index, with: nil, in: currentText)
+        try? content.write(to: url, atomically: true, encoding: .utf8)
+
+        showNoteEditor = false
+        noteContent = ""
+        editingNoteIndex = nil
+        insertAfterHeading = nil
+    }
+
+    private func replaceReviewBlock(at index: Int, with newContent: String?, in text: String) -> String {
+        let pattern = "```review\\n[\\s\\S]*?\\n```"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let nsText = text as NSString
+        let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
+        guard index < matches.count else { return text }
+
+        let match = matches[index]
+        var result = text
+        let range = Range(match.range, in: text)!
+        if let newContent = newContent {
+            result.replaceSubrange(range, with: "```review\n\(newContent)\n```")
+        } else {
+            // Delete: also remove surrounding blank lines
+            let start = text.index(range.lowerBound, offsetBy: 0)
+            var end = range.upperBound
+            // Consume trailing newlines
+            while end < text.endIndex && text[end] == "\n" {
+                end = text.index(after: end)
+            }
+            // Consume leading newlines
+            var actualStart = start
+            if actualStart > text.startIndex {
+                let before = text.index(before: actualStart)
+                if text[before] == "\n" {
+                    actualStart = before
+                    if actualStart > text.startIndex {
+                        let before2 = text.index(before: actualStart)
+                        if text[before2] == "\n" {
+                            actualStart = before2
+                        }
+                    }
+                }
+            }
+            result.replaceSubrange(actualStart..<end, with: "")
+        }
+        return result
+    }
+
+    private func insertAfterHeadingText(_ headingText: String, note: String, in text: String) -> String {
+        let lines = text.components(separatedBy: "\n")
+        var insertIndex = lines.count
+        var inCodeBlock = false
+
+        for (i, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("```") { inCodeBlock = !inCodeBlock; continue }
+            if inCodeBlock { continue }
+
+            if let match = trimmed.range(of: "^#{1,6}\\s+", options: .regularExpression) {
+                var title = String(trimmed[match.upperBound...])
+                if let trailing = title.range(of: "\\s+#+\\s*$", options: .regularExpression) {
+                    title = String(title[..<trailing.lowerBound])
+                }
+                if title == headingText {
+                    // Find the end of this section (next heading or end)
+                    for j in (i + 1)..<lines.count {
+                        let nextTrimmed = lines[j].trimmingCharacters(in: .whitespaces)
+                        if nextTrimmed.range(of: "^#{1,6}\\s+", options: .regularExpression) != nil {
+                            insertIndex = j
+                            break
+                        }
+                    }
+                    if insertIndex == lines.count { insertIndex = lines.count }
+                    break
+                }
+            }
+        }
+
+        var result = lines
+        result.insert(contentsOf: note.components(separatedBy: "\n"), at: insertIndex)
+        return result.joined(separator: "\n")
     }
 
     // MARK: - File Watcher

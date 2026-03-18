@@ -24,6 +24,8 @@ As AI-assisted development tools like Claude Code become the primary way to writ
 - **Light/Dark/System appearance** toggle (View > Appearance)
 - **Search** (Cmd+F) with match highlighting and navigation
 - **Zoom** (Cmd+/-, trackpad pinch, click-drag pan when zoomed)
+- **Review notes** — add inline review feedback that Claude Code can read and act on (see [Review Workflow](#review-workflow))
+- **Voice dictation** support — toggle Voice mode in the action bar, use native macOS dictation (Fn+Fn) to speak notes
 - **Copy Markdown Source** (Cmd+Shift+C) copies raw markdown
 - **Copy HTML** (Cmd+Option+C) copies standalone HTML with CSS and diagrams as PNG — pastes cleanly into Google Docs
 - **Export HTML** (Cmd+E) saves a standalone `.html` file with everything embedded
@@ -100,6 +102,37 @@ open -a "Markdown Viewer" README.md
 | Copy markdown source | Cmd+Shift+C |
 | Copy HTML | Cmd+Option+C |
 | Export HTML | Cmd+E |
+| Add review note | Cmd+Shift+N |
+| Add note at section | Cmd+double-click |
+
+## Review Workflow
+
+MarkdownViewer supports inline review notes designed for the AI-assisted development loop:
+
+1. **Claude Code generates** a document (architecture diagram, design doc, etc.)
+2. **You open it** in MarkdownViewer (Cmd+click the file path in your terminal)
+3. **You add review notes** — click "Add Note" or Cmd+double-click near a section heading
+4. **Use voice dictation** — toggle "Voice" in the action bar, then press Fn twice to dictate your feedback
+5. **Notes are saved** as ` ```review ` code blocks directly in the `.md` file
+6. **Tell Claude Code** to read your feedback: *"read my review notes in architecture.md and address them"*
+7. **Claude Code finds** the ` ```review ` blocks and acts on your feedback
+
+### Note format
+
+Notes are stored as fenced code blocks with the `review` language tag:
+
+````markdown
+```review
+This section needs error handling for the edge case where the API returns 404.
+Consider adding a retry mechanism.
+```
+````
+
+This format is:
+- **Valid markdown** — renders as a code block in any viewer, GitHub, etc.
+- **Non-destructive** — doesn't break document formatting
+- **Machine-readable** — Claude Code and other tools can easily find and parse them
+- **Rendered specially** — MarkdownViewer shows them as styled callout blocks with Edit/Delete buttons
 
 ## Architecture
 

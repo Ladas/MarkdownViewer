@@ -17,12 +17,16 @@ struct MarkdownWebView: NSViewRepresentable {
     var onSearchResult: ((Int, Int) -> Void)?
     var onCopyDone: (() -> Void)?
     var onExportHTML: ((String) -> Void)?
+    var onEditNote: ((Int, String) -> Void)?
+    var onAddNoteAtHeading: ((String) -> Void)?
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.userContentController.add(context.coordinator, name: "copyImage")
         config.userContentController.add(context.coordinator, name: "copyRendered")
         config.userContentController.add(context.coordinator, name: "exportHTML")
+        config.userContentController.add(context.coordinator, name: "editNote")
+        config.userContentController.add(context.coordinator, name: "addNoteAtHeading")
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.allowsMagnification = true
@@ -39,6 +43,8 @@ struct MarkdownWebView: NSViewRepresentable {
         coord.onSearchResult = onSearchResult
         coord.onCopyDone = onCopyDone
         coord.onExportHTML = onExportHTML
+        coord.onEditNote = onEditNote
+        coord.onAddNoteAtHeading = onAddNoteAtHeading
 
         let contentChanged = coord.lastMarkdown != markdown || coord.lastOverrideHTML != overrideHTML
         if contentChanged {
@@ -117,6 +123,8 @@ struct MarkdownWebView: NSViewRepresentable {
         var onSearchResult: ((Int, Int) -> Void)?
         var onCopyDone: (() -> Void)?
         var onExportHTML: ((String) -> Void)?
+        var onEditNote: ((Int, String) -> Void)?
+        var onAddNoteAtHeading: ((String) -> Void)?
 
         // MARK: - WKScriptMessageHandler
 
@@ -130,6 +138,17 @@ struct MarkdownWebView: NSViewRepresentable {
                 handleCopyRendered(message)
             } else if message.name == "exportHTML" {
                 handleExportHTML(message)
+            } else if message.name == "editNote" {
+                if let dict = message.body as? [String: Any],
+                   let index = dict["index"] as? Int,
+                   let content = dict["content"] as? String {
+                    onEditNote?(index, content)
+                }
+            } else if message.name == "addNoteAtHeading" {
+                if let dict = message.body as? [String: Any],
+                   let heading = dict["heading"] as? String {
+                    onAddNoteAtHeading?(heading)
+                }
             }
         }
 
