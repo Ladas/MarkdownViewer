@@ -117,6 +117,11 @@ struct MarkdownWebView: NSViewRepresentable {
             case "dark": webView.appearance = NSAppearance(named: .darkAqua)
             default: webView.appearance = nil
             }
+            // Re-render mermaid with correct theme
+            if coord.pageLoaded {
+                let theme = appearanceMode == "dark" ? "dark" : (appearanceMode == "light" ? "default" : (webView.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? "dark" : "default"))
+                webView.evaluateJavaScript("rerenderMermaid('\(theme)')") { _, _ in }
+            }
         }
 
         if coord.lastContentWidth != contentWidth {

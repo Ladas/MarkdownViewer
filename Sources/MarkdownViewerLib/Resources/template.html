@@ -238,27 +238,35 @@
             try {
                 var rules = document.styleSheets[i].cssRules;
                 for (var j = 0; j < rules.length; j++) {
-                    styles += rules[j].cssText + '\n';
+                    var rule = rules[j];
+                    if (mode === 'light' && rule.type === CSSRule.MEDIA_RULE &&
+                        rule.conditionText && rule.conditionText.indexOf('dark') !== -1) {
+                        continue; // Skip dark media queries in light mode
+                    }
+                    if (mode === 'dark' && rule.type === CSSRule.MEDIA_RULE &&
+                        rule.conditionText && rule.conditionText.indexOf('dark') !== -1) {
+                        // Extract dark rules as unconditional
+                        for (var k = 0; k < rule.cssRules.length; k++) {
+                            styles += rule.cssRules[k].cssText + '\n';
+                        }
+                        continue;
+                    }
+                    styles += rule.cssText + '\n';
                 }
             } catch(e) {}
         }
 
-        var modeStyle = '';
         if (mode === 'light') {
-            modeStyle = '\nbody { background: #ffffff !important; color: #1f2328 !important; }\n'
-                + '.markdown-body { color: #1f2328 !important; }\n'
-                + 'code, pre { background-color: #f6f8fa !important; color: #1f2328 !important; }\n';
+            styles += '\nbody { background: #ffffff !important; color: #1f2328 !important; }\n';
         } else if (mode === 'dark') {
-            modeStyle = '\nbody { background: #0d1117 !important; color: #e6edf3 !important; }\n'
-                + '.markdown-body { color: #e6edf3 !important; }\n'
-                + 'code, pre { background-color: #161b22 !important; color: #e6edf3 !important; }\n';
+            styles += '\nbody { background: #0d1117 !important; color: #e6edf3 !important; }\n';
         }
 
         var colorScheme = mode === 'dark' ? 'dark' : 'light';
         var meta = mode !== 'auto' ? '<meta name="color-scheme" content="' + colorScheme + '">\n' : '';
 
         return '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n' + meta + '<style>\n'
-            + styles + modeStyle
+            + styles
             + '</style>\n</head>\n<body>\n<article class="markdown-body">\n'
             + clone.innerHTML
             + '\n</article>\n</body>\n</html>';
@@ -465,6 +473,37 @@
             target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     });
+
+    // Re-render mermaid diagrams with a new theme
+    function rerenderMermaid(theme) {
+        if (typeof mermaid === 'undefined') return;
+        // Reset mermaid IDs and re-render
+        document.querySelectorAll('.mermaid-container').forEach(function(container) {
+            var pre = container.querySelector('pre.mermaid');
+            if (!pre) return;
+            var svg = pre.querySelector('svg');
+            if (svg) svg.remove();
+            pre.removeAttribute('data-processed');
+            container.parentNode.insertBefore(pre, container);
+            container.remove();
+        });
+        document.querySelectorAll('pre.mermaid[data-processed]').forEach(function(pre) {
+            var svg = pre.querySelector('svg');
+            if (svg) svg.remove();
+            pre.removeAttribute('data-processed');
+        });
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: theme,
+            securityLevel: 'loose',
+            flowchart: { htmlLabels: true, useMaxWidth: true },
+            sequence: { useMaxWidth: true },
+            gantt: { useMaxWidth: true }
+        });
+        mermaid.run()
+            .then(addDiagramCopyButtons)
+            .catch(function(e) { console.error('Mermaid re-render error:', e); });
+    }
 
     // Content width control
     function setContentWidth(px) {
