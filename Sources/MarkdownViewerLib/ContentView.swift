@@ -368,6 +368,21 @@ public struct ContentView: View {
 
     private var actionBar: some View {
         HStack(spacing: 4) {
+            if let url = fileURL {
+                Button(action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url.path, forType: .string)
+                    showCopiedToast()
+                }) {
+                    Text(url.lastPathComponent)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .help("Click to copy path: \(url.path)")
+            }
+
             actionButton("Contents", icon: "list.bullet.indent", active: showTOC) {
                 showTOC.toggle()
             }

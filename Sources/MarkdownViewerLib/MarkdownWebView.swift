@@ -53,8 +53,12 @@ struct MarkdownWebView: NSViewRepresentable {
             coord.lastOverrideHTML = overrideHTML
             coord.lastSearchText = nil
             coord.pageLoaded = false
-            let html = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
-            webView.loadHTMLString(html, baseURL: nil)
+            let htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
+            // Save scroll position before reload, restore in didFinish
+            webView.evaluateJavaScript("window.scrollY") { result, _ in
+                coord.savedScrollY = result as? Double ?? 0
+                webView.loadHTMLString(htmlToLoad, baseURL: nil)
+            }
             return
         }
 
@@ -138,6 +142,7 @@ struct MarkdownWebView: NSViewRepresentable {
         var lastAppearanceMode: String = "auto"
         var lastContentWidth: Double = 980
         var pageLoaded = false
+        var savedScrollY: Double = 0
         var pendingSearch: String?
         var onSearchResult: ((Int, Int) -> Void)?
         var onCopyDone: (() -> Void)?
@@ -242,6 +247,11 @@ struct MarkdownWebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             pageLoaded = true
+            if savedScrollY > 0 {
+                let y = savedScrollY
+                savedScrollY = 0
+                webView.evaluateJavaScript("window.scrollTo(0, \(y))") { _, _ in }
+            }
             if let search = pendingSearch {
                 pendingSearch = nil
                 performSearch(search, in: webView)
