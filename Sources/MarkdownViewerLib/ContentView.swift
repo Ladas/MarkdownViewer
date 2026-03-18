@@ -175,7 +175,9 @@ public struct ContentView: View {
     @State private var navigationTrigger = 0
     @State private var navigationForward = true
     @State private var copyRenderedTrigger = 0
+    @State private var copyHTMLMode = "auto"
     @State private var exportHTMLTrigger = 0
+    @State private var exportHTMLMode = "auto"
     @State private var zoomLevel: Double = 1.0
     @State private var showCopied = false
     @State private var showTOC = false
@@ -249,7 +251,9 @@ public struct ContentView: View {
                     navigationTrigger: navigationTrigger,
                     navigationForward: navigationForward,
                     copyRenderedTrigger: copyRenderedTrigger,
+                    copyHTMLMode: copyHTMLMode,
                     exportHTMLTrigger: exportHTMLTrigger,
+                    exportHTMLMode: exportHTMLMode,
                     zoomLevel: zoomLevel,
                     scrollToHeadingTrigger: scrollToHeadingTrigger,
                     scrollToHeadingIndex: scrollToHeadingIndex,
@@ -457,12 +461,21 @@ public struct ContentView: View {
                 }
                 .help("Copy file path and review note instructions for your AI agent")
             }
+            // Appearance: cycle auto → light → dark
+            Button(action: cycleAppearance) {
+                Image(systemName: appearanceIcon)
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Appearance: \(appearanceMode) (affects preview and copy)")
+
             actionButton("MD", icon: "doc.on.doc") { copySource() }
                 .help("Copy raw markdown source to clipboard (Cmd+Shift+C)")
             actionButton("HTML", icon: "doc.richtext") { copyRendered() }
-                .help("Copy as standalone HTML with CSS and diagrams as PNG (Cmd+Option+C)")
+                .help("Copy as standalone HTML in \(appearanceMode) mode (Cmd+Option+C)")
             actionButton("Export", icon: "square.and.arrow.up") { exportHTML() }
-                .help("Save as standalone HTML file (Cmd+E)")
+                .help("Export HTML file in \(appearanceMode) mode (Cmd+E)")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -754,6 +767,22 @@ public struct ContentView: View {
         if !showSearch { showSearch = true; isSearchFocused = true; return }
         navigationForward = false
         navigationTrigger += 1
+    }
+
+    private var appearanceIcon: String {
+        switch appearanceMode {
+        case "light": return "sun.max.fill"
+        case "dark": return "moon.fill"
+        default: return "circle.lefthalf.filled"
+        }
+    }
+
+    private func cycleAppearance() {
+        switch appearanceMode {
+        case "auto": appearanceMode = "light"; copyHTMLMode = "light"; exportHTMLMode = "light"
+        case "light": appearanceMode = "dark"; copyHTMLMode = "dark"; exportHTMLMode = "dark"
+        default: appearanceMode = "auto"; copyHTMLMode = "auto"; exportHTMLMode = "auto"
+        }
     }
 
     private func copySource() {

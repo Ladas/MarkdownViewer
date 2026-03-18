@@ -9,7 +9,9 @@ struct MarkdownWebView: NSViewRepresentable {
     var navigationTrigger: Int = 0
     var navigationForward: Bool = true
     var copyRenderedTrigger: Int = 0
+    var copyHTMLMode: String = "auto"
     var exportHTMLTrigger: Int = 0
+    var exportHTMLMode: String = "auto"
     var zoomLevel: Double = 1.0
     var scrollToHeadingTrigger: Int = 0
     var scrollToHeadingIndex: Int = -1
@@ -91,14 +93,14 @@ struct MarkdownWebView: NSViewRepresentable {
         if copyChanged {
             coord.lastCopyRenderedTrigger = copyRenderedTrigger
             guard coord.pageLoaded else { return }
-            webView.evaluateJavaScript("copyRenderedContent()") { _, _ in }
+            webView.evaluateJavaScript("copyRenderedContent('\(copyHTMLMode)')") { _, _ in }
         }
 
         let exportChanged = coord.lastExportHTMLTrigger != exportHTMLTrigger
         if exportChanged {
             coord.lastExportHTMLTrigger = exportHTMLTrigger
             guard coord.pageLoaded else { return }
-            webView.evaluateJavaScript("exportHTMLContent()") { _, _ in }
+            webView.evaluateJavaScript("exportHTMLContent('\(exportHTMLMode)')") { _, _ in }
         }
 
         if scrollChanged {
