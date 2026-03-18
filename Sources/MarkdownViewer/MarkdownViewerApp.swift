@@ -15,6 +15,7 @@ struct MarkdownViewerApp: App {
     @FocusedValue(\.addNote) var addNote
     @FocusedValue(\.toggleTOC) var toggleTOC
     @FocusedValue(\.toggleDiff) var toggleDiff
+    @FocusedValue(\.toggleChat) var toggleChat
     @FocusedValue(\.setAppearance) var setAppearance
 
     var body: some Scene {
@@ -93,6 +94,11 @@ struct MarkdownViewerApp: App {
                     toggleDiff?()
                 }
                 .keyboardShortcut("d", modifiers: .command)
+
+                Button("Claude Chat") {
+                    toggleChat?()
+                }
+                .keyboardShortcut("k", modifiers: [.command, .shift])
 
                 Divider()
 
