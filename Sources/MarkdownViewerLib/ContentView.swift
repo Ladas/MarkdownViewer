@@ -5,9 +5,9 @@ import UniformTypeIdentifiers
 // MARK: - View Mode
 
 public enum ViewMode: String, CaseIterable {
-    case source = "Source"
+    case sourceMD = "Source MD"
     case preview = "Preview"
-    case html = "HTML"
+    case sourceHTML = "Source HTML"
 }
 
 // MARK: - TOC Entry
@@ -192,8 +192,8 @@ public struct ContentView: View {
         if showDiff { return diffHTML }
         switch viewMode {
         case .preview: return nil
-        case .source: return SourceHighlighter.render(currentText)
-        case .html: return SourceHighlighter.renderHTMLPreview(currentText)
+        case .sourceMD: return SourceHighlighter.render(currentText)
+        case .sourceHTML: return SourceHighlighter.renderHTMLPreview(currentText)
         }
     }
 
@@ -426,6 +426,10 @@ public struct ContentView: View {
             }
 
             Spacer()
+
+            Text("Cmd+dblclick to comment")
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
 
             Image(systemName: "arrow.left.and.right")
                 .font(.system(size: 9))
