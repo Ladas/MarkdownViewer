@@ -23,8 +23,14 @@
             var rawHTML = marked.parse(markdown);
             if (typeof DOMPurify !== 'undefined') {
                 rawHTML = DOMPurify.sanitize(rawHTML);
+                document.getElementById('content').innerHTML = rawHTML;
+            } else {
+                // Fail closed: refuse to render unsanitized HTML
+                var safeEl = document.getElementById('content');
+                var warn = document.createElement('pre');
+                warn.textContent = 'Error: DOMPurify not loaded. Run "make deps" to install dependencies.\n\nRaw markdown shown below:\n\n' + markdown;
+                safeEl.appendChild(warn);
             }
-            document.getElementById('content').innerHTML = rawHTML;
         } else {
             var el = document.getElementById('content');
             var pre = document.createElement('pre');

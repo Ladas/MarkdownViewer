@@ -113,6 +113,13 @@ struct MarkdownWebView: NSViewRepresentable {
         }
     }
 
+    static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        let controller = webView.configuration.userContentController
+        for name in ["copyImage", "copyRendered", "exportHTML", "editNote", "addNoteAtHeading"] {
+            controller.removeScriptMessageHandler(forName: name)
+        }
+    }
+
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
@@ -132,7 +139,6 @@ struct MarkdownWebView: NSViewRepresentable {
         var lastContentWidth: Double = 980
         var pageLoaded = false
         var pendingSearch: String?
-        var pendingAppearance: String?
         var onSearchResult: ((Int, Int) -> Void)?
         var onCopyDone: (() -> Void)?
         var onExportHTML: ((String) -> Void)?
@@ -239,11 +245,6 @@ struct MarkdownWebView: NSViewRepresentable {
             if let search = pendingSearch {
                 pendingSearch = nil
                 performSearch(search, in: webView)
-            }
-            if let appearance = pendingAppearance {
-                pendingAppearance = nil
-                let escaped = appearance.replacingOccurrences(of: "'", with: "\\'")
-                webView.evaluateJavaScript("setAppearance('\(escaped)')") { _, _ in }
             }
             if lastAppearanceMode != "auto" {
                 let escaped = lastAppearanceMode.replacingOccurrences(of: "'", with: "\\'")
