@@ -247,8 +247,10 @@
                document.documentElement.scrollHeight > window.innerHeight + 1;
     }
 
+    // Option+click-drag to pan (normal click-drag selects text)
     document.addEventListener('mousedown', function(e) {
         if (e.button !== 0) return;
+        if (!e.altKey) return;
         if (e.target.closest('a, button, input, textarea, .mermaid-copy-btn')) return;
         if (!isOverflowing()) return;
 
