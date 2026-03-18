@@ -139,7 +139,7 @@ struct ChatPanelView: View {
     @State private var historyManager: ChatHistoryManager?
     @State private var cliRunner: ClaudeCLIRunner?
     @State private var gitRoot: URL?
-    @State private var allowEditing = false
+    @State private var allowEditing = true
     @FocusState private var isInputFocused: Bool
 
     var body: some View {
