@@ -12,6 +12,7 @@ struct MarkdownViewerApp: App {
     @FocusedValue(\.zoomOut) var zoomOut
     @FocusedValue(\.zoomReset) var zoomReset
     @FocusedValue(\.exportHTML) var exportHTML
+    @FocusedValue(\.addNote) var addNote
     @FocusedValue(\.toggleTOC) var toggleTOC
     @FocusedValue(\.toggleDiff) var toggleDiff
     @FocusedValue(\.setAppearance) var setAppearance
@@ -54,6 +55,13 @@ struct MarkdownViewerApp: App {
                     exportHTML?()
                 }
                 .keyboardShortcut("e", modifiers: .command)
+
+                Divider()
+
+                Button("Add Review Note") {
+                    addNote?()
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
             }
 
             CommandGroup(after: .toolbar) {

@@ -14,15 +14,20 @@ struct MarkdownWebView: NSViewRepresentable {
     var scrollToHeadingTrigger: Int = 0
     var scrollToHeadingIndex: Int = -1
     var appearanceMode: String = "auto"
+    var contentWidth: Double = 980
     var onSearchResult: ((Int, Int) -> Void)?
     var onCopyDone: (() -> Void)?
     var onExportHTML: ((String) -> Void)?
+    var onEditNote: ((Int, String) -> Void)?
+    var onAddNoteAtHeading: ((String) -> Void)?
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.userContentController.add(context.coordinator, name: "copyImage")
         config.userContentController.add(context.coordinator, name: "copyRendered")
         config.userContentController.add(context.coordinator, name: "exportHTML")
+        config.userContentController.add(context.coordinator, name: "editNote")
+        config.userContentController.add(context.coordinator, name: "addNoteAtHeading")
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.allowsMagnification = true
@@ -39,6 +44,8 @@ struct MarkdownWebView: NSViewRepresentable {
         coord.onSearchResult = onSearchResult
         coord.onCopyDone = onCopyDone
         coord.onExportHTML = onExportHTML
+        coord.onEditNote = onEditNote
+        coord.onAddNoteAtHeading = onAddNoteAtHeading
 
         let contentChanged = coord.lastMarkdown != markdown || coord.lastOverrideHTML != overrideHTML
         if contentChanged {
@@ -46,8 +53,12 @@ struct MarkdownWebView: NSViewRepresentable {
             coord.lastOverrideHTML = overrideHTML
             coord.lastSearchText = nil
             coord.pageLoaded = false
-            let html = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
-            webView.loadHTMLString(html, baseURL: nil)
+            let htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
+            // Save scroll position before reload, restore in didFinish
+            webView.evaluateJavaScript("window.scrollY") { result, _ in
+                coord.savedScrollY = result as? Double ?? 0
+                webView.loadHTMLString(htmlToLoad, baseURL: nil)
+            }
             return
         }
 
@@ -65,7 +76,10 @@ struct MarkdownWebView: NSViewRepresentable {
             coord.navigateSearch(navigationForward ? "next" : "prev", in: webView)
         }
 
-        webView.pageZoom = zoomLevel
+        if coord.lastZoomLevel != zoomLevel {
+            coord.lastZoomLevel = zoomLevel
+            webView.pageZoom = zoomLevel
+        }
 
         if copyChanged {
             coord.lastCopyRenderedTrigger = copyRenderedTrigger
@@ -94,6 +108,20 @@ struct MarkdownWebView: NSViewRepresentable {
                 webView.evaluateJavaScript("setAppearance('\(escaped)')") { _, _ in }
             }
         }
+
+        if coord.lastContentWidth != contentWidth {
+            coord.lastContentWidth = contentWidth
+            if coord.pageLoaded {
+                webView.evaluateJavaScript("setContentWidth(\(Int(contentWidth)))") { _, _ in }
+            }
+        }
+    }
+
+    static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        let controller = webView.configuration.userContentController
+        for name in ["copyImage", "copyRendered", "exportHTML", "editNote", "addNoteAtHeading"] {
+            controller.removeScriptMessageHandler(forName: name)
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -110,13 +138,17 @@ struct MarkdownWebView: NSViewRepresentable {
         var lastCopyRenderedTrigger: Int = 0
         var lastExportHTMLTrigger: Int = 0
         var lastScrollTrigger: Int = 0
+        var lastZoomLevel: Double = 1.0
         var lastAppearanceMode: String = "auto"
+        var lastContentWidth: Double = 980
         var pageLoaded = false
+        var savedScrollY: Double = 0
         var pendingSearch: String?
-        var pendingAppearance: String?
         var onSearchResult: ((Int, Int) -> Void)?
         var onCopyDone: (() -> Void)?
         var onExportHTML: ((String) -> Void)?
+        var onEditNote: ((Int, String) -> Void)?
+        var onAddNoteAtHeading: ((String) -> Void)?
 
         // MARK: - WKScriptMessageHandler
 
@@ -130,6 +162,17 @@ struct MarkdownWebView: NSViewRepresentable {
                 handleCopyRendered(message)
             } else if message.name == "exportHTML" {
                 handleExportHTML(message)
+            } else if message.name == "editNote" {
+                if let dict = message.body as? [String: Any],
+                   let index = dict["index"] as? Int,
+                   let content = dict["content"] as? String {
+                    onEditNote?(index, content)
+                }
+            } else if message.name == "addNoteAtHeading" {
+                if let dict = message.body as? [String: Any],
+                   let heading = dict["heading"] as? String {
+                    onAddNoteAtHeading?(heading)
+                }
             }
         }
 
@@ -204,14 +247,14 @@ struct MarkdownWebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             pageLoaded = true
+            if savedScrollY > 0 {
+                let y = savedScrollY
+                savedScrollY = 0
+                webView.evaluateJavaScript("window.scrollTo(0, \(y))") { _, _ in }
+            }
             if let search = pendingSearch {
                 pendingSearch = nil
                 performSearch(search, in: webView)
-            }
-            if let appearance = pendingAppearance {
-                pendingAppearance = nil
-                let escaped = appearance.replacingOccurrences(of: "'", with: "\\'")
-                webView.evaluateJavaScript("setAppearance('\(escaped)')") { _, _ in }
             }
             if lastAppearanceMode != "auto" {
                 let escaped = lastAppearanceMode.replacingOccurrences(of: "'", with: "\\'")

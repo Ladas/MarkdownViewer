@@ -63,6 +63,83 @@ body {
     }
 }
 
+/* Review notes */
+.review-note {
+    position: relative;
+    border-left: 4px solid #0969da;
+    background: rgba(9, 105, 218, 0.06);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 14px;
+}
+
+.review-note-label {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #0969da;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.review-note-content {
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+.review-note-edit {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(9, 105, 218, 0.1);
+    color: #0969da;
+    border: 1px solid rgba(9, 105, 218, 0.3);
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.review-note:hover .review-note-edit {
+    opacity: 1;
+}
+
+.review-note-edit:hover {
+    background: rgba(9, 105, 218, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+    .review-note {
+        border-left-color: #58a6ff;
+        background: rgba(56, 139, 253, 0.08);
+    }
+    .review-note-label {
+        color: #58a6ff;
+    }
+    .review-note-edit {
+        background: rgba(56, 139, 253, 0.1);
+        color: #58a6ff;
+        border-color: rgba(56, 139, 253, 0.3);
+    }
+    .review-note-edit:hover {
+        background: rgba(56, 139, 253, 0.2);
+    }
+}
+
+html.light-override .review-note {
+    border-left-color: #0969da;
+    background: rgba(9, 105, 218, 0.06);
+}
+html.dark-override .review-note {
+    border-left-color: #58a6ff;
+    background: rgba(56, 139, 253, 0.08);
+}
+
 body.panning {
     cursor: grabbing;
     user-select: none;

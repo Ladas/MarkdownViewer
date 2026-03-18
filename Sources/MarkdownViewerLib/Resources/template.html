@@ -4,8 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https:;">
+          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https:; font-src data:;">
     <style>/* {{VENDOR_CSS}} */</style>
+    <style>/* {{FA_CSS}} */</style>
     <style>/* {{CSS}} */</style>
     <script>/* {{PURIFY_JS}} */</script>
     <script>/* {{MARKED_JS}} */</script>
@@ -22,8 +23,14 @@
             var rawHTML = marked.parse(markdown);
             if (typeof DOMPurify !== 'undefined') {
                 rawHTML = DOMPurify.sanitize(rawHTML);
+                document.getElementById('content').innerHTML = rawHTML;
+            } else {
+                // Fail closed: refuse to render unsanitized HTML
+                var safeEl = document.getElementById('content');
+                var warn = document.createElement('pre');
+                warn.textContent = 'Error: DOMPurify not loaded. Run "make deps" to install dependencies.\n\nRaw markdown shown below:\n\n' + markdown;
+                safeEl.appendChild(warn);
             }
-            document.getElementById('content').innerHTML = rawHTML;
         } else {
             var el = document.getElementById('content');
             var pre = document.createElement('pre');
@@ -36,6 +43,36 @@
             var div = document.createElement('pre');
             div.className = 'mermaid';
             div.textContent = el.textContent;
+            pre.replaceWith(div);
+        });
+
+        // Render review note blocks as styled callouts with Edit button
+        var _reviewIndex = 0;
+        document.querySelectorAll('code.language-review').forEach(function(el) {
+            var pre = el.parentElement;
+            var div = document.createElement('div');
+            div.className = 'review-note';
+            var idx = _reviewIndex++;
+
+            var label = document.createElement('span');
+            label.className = 'review-note-label';
+            label.textContent = 'Review Note';
+            div.appendChild(label);
+
+            var content = document.createElement('div');
+            content.className = 'review-note-content';
+            content.textContent = el.textContent;
+            div.appendChild(content);
+
+            var editBtn = document.createElement('button');
+            editBtn.className = 'review-note-edit';
+            editBtn.textContent = 'Edit';
+            editBtn.onclick = function(e) {
+                e.stopPropagation();
+                postToHandler('editNote', { index: idx, content: content.textContent });
+            };
+            div.appendChild(editBtn);
+
             pre.replaceWith(div);
         });
 
@@ -105,9 +142,7 @@
             btn.onclick = function(e) {
                 e.stopPropagation();
                 svgToPngDataUrl(svg).then(function(pngUrl) {
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyImage) {
-                        window.webkit.messageHandlers.copyImage.postMessage(pngUrl);
-                    }
+                    postToHandler('copyImage', pngUrl);
                     btn.textContent = 'Copied!';
                     setTimeout(function() { btn.textContent = 'Copy diagram'; }, 1500);
                 }).catch(function() {
@@ -160,19 +195,21 @@
         clone.querySelectorAll('table').forEach(function(table) {
             table.style.borderCollapse = 'collapse';
             table.style.borderSpacing = '0';
-            table.style.width = 'auto';
             table.style.marginBottom = '16px';
             table.style.fontSize = '14px';
+            table.setAttribute('cellpadding', '0');
+            table.setAttribute('cellspacing', '0');
         });
         clone.querySelectorAll('th').forEach(function(th) {
-            th.style.padding = '6px 13px';
+            th.style.padding = '8px 16px';
             th.style.border = '1px solid #d0d7de';
             th.style.fontWeight = '600';
             th.style.backgroundColor = '#f6f8fa';
             th.style.textAlign = 'left';
+            th.style.whiteSpace = 'nowrap';
         });
         clone.querySelectorAll('td').forEach(function(td) {
-            td.style.padding = '6px 13px';
+            td.style.padding = '8px 16px';
             td.style.border = '1px solid #d0d7de';
             td.style.textAlign = 'left';
         });
@@ -186,11 +223,10 @@
         return clone;
     }
 
-    // Copy rendered content as standalone HTML (with CSS inlined, mermaid as PNG)
-    async function copyRenderedContent() {
+    // Build standalone HTML from rendered content
+    async function buildStandaloneHTML() {
         var clone = await prepareCleanContent();
 
-        // Collect CSS from all stylesheets
         var styles = '';
         for (var i = 0; i < document.styleSheets.length; i++) {
             try {
@@ -201,40 +237,25 @@
             } catch(e) {}
         }
 
-        var html = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>\n'
+        return '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>\n'
             + styles
             + '</style>\n</head>\n<body>\n<article class="markdown-body">\n'
             + clone.innerHTML
             + '\n</article>\n</body>\n</html>';
+    }
 
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.copyRendered) {
-            window.webkit.messageHandlers.copyRendered.postMessage(html);
+    function postToHandler(name, body) {
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[name]) {
+            window.webkit.messageHandlers[name].postMessage(body);
         }
     }
 
-    // Export as standalone HTML file
+    async function copyRenderedContent() {
+        postToHandler('copyRendered', await buildStandaloneHTML());
+    }
+
     async function exportHTMLContent() {
-        var clone = await prepareCleanContent();
-
-        var styles = '';
-        for (var i = 0; i < document.styleSheets.length; i++) {
-            try {
-                var rules = document.styleSheets[i].cssRules;
-                for (var j = 0; j < rules.length; j++) {
-                    styles += rules[j].cssText + '\n';
-                }
-            } catch(e) {}
-        }
-
-        var html = '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>\n'
-            + styles
-            + '</style>\n</head>\n<body>\n<article class="markdown-body">\n'
-            + clone.innerHTML
-            + '\n</article>\n</body>\n</html>';
-
-        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.exportHTML) {
-            window.webkit.messageHandlers.exportHTML.postMessage(html);
-        }
+        postToHandler('exportHTML', await buildStandaloneHTML());
     }
     </script>
 
@@ -376,6 +397,53 @@
         if (index >= 0 && index < headings.length) {
             headings[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+    }
+
+    // Cmd+double-click to add a review note at nearest heading
+    document.addEventListener('dblclick', function(e) {
+        if (!e.metaKey) return;
+        e.preventDefault();
+
+        // Find the nearest preceding heading
+        var node = e.target;
+        var headingText = '';
+        while (node && node !== document.body) {
+            if (/^H[1-6]$/.test(node.tagName)) {
+                headingText = node.textContent;
+                break;
+            }
+            // Check previous siblings for headings
+            var prev = node.previousElementSibling;
+            while (prev) {
+                if (/^H[1-6]$/.test(prev.tagName)) {
+                    headingText = prev.textContent;
+                    break;
+                }
+                prev = prev.previousElementSibling;
+            }
+            if (headingText) break;
+            node = node.parentElement;
+        }
+
+        postToHandler('addNoteAtHeading', { heading: headingText });
+    });
+
+    // Anchor link scrolling (loadHTMLString has no base URL, so handle in JS)
+    document.addEventListener('click', function(e) {
+        var link = e.target.closest('a');
+        if (!link) return;
+        var href = link.getAttribute('href');
+        if (!href || href.charAt(0) !== '#') return;
+        e.preventDefault();
+        var target = document.getElementById(href.substring(1));
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    });
+
+    // Content width control
+    function setContentWidth(px) {
+        document.getElementById('content').style.maxWidth = px + 'px';
     }
 
     // Appearance override
