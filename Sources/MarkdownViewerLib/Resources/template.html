@@ -42,9 +42,7 @@
             var pre = el.parentElement;
             var div = document.createElement('pre');
             div.className = 'mermaid';
-            // Replace literal \n with <br/> for line breaks in labels (GitHub compat)
-            var mermaidText = el.textContent.replace(/\\n/g, '<br/>');
-            div.innerHTML = mermaidText;
+            div.textContent = el.textContent;
             pre.replaceWith(div);
         });
 
