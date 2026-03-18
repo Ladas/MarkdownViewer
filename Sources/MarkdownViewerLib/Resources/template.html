@@ -42,8 +42,6 @@
             var pre = el.parentElement;
             var div = document.createElement('pre');
             div.className = 'mermaid';
-            // Use textContent to safely escape HTML, then replace \n with <br/>
-            // for line break support in labels (GitHub compat)
             div.textContent = el.textContent;
             div.innerHTML = div.innerHTML.replace(/\\n/g, '<br/>');
             pre.replaceWith(div);
@@ -89,7 +87,41 @@
                 gantt: { useMaxWidth: true }
             });
             mermaid.run()
-                .then(addDiagramCopyButtons)
+                .then(function() {
+                    // Fix clipped multi-line text: expand SVG if content exceeds viewBox
+                    document.querySelectorAll('pre.mermaid svg').forEach(function(svg) {
+                        try {
+                            var bbox = svg.getBBox();
+                            var vb = svg.viewBox.baseVal;
+                            if (bbox.height > vb.height) {
+                                var pad = 20;
+                                vb.height = bbox.height + pad;
+                                svg.setAttribute('height', vb.height);
+                            }
+                        } catch(e) {}
+                    });
+                    // Fix node boxes that clip multi-line text
+                    document.querySelectorAll('pre.mermaid svg .node').forEach(function(node) {
+                        try {
+                            var fo = node.querySelector('foreignObject');
+                            var rect = node.querySelector('rect');
+                            if (fo && rect) {
+                                var div = fo.querySelector('div');
+                                if (div && div.scrollHeight > fo.getAttribute('height')) {
+                                    var newH = div.scrollHeight + 10;
+                                    fo.setAttribute('height', newH);
+                                    rect.setAttribute('height', newH);
+                                    // Center the rect vertically
+                                    var oldH = parseFloat(rect.getAttribute('height'));
+                                    var dy = (newH - oldH) / 2;
+                                    var oldY = parseFloat(rect.getAttribute('y') || 0);
+                                    rect.setAttribute('y', oldY - dy);
+                                }
+                            }
+                        } catch(e) {}
+                    });
+                    addDiagramCopyButtons();
+                })
                 .catch(function(e) { console.error('Mermaid error:', e); });
         }
     })();
