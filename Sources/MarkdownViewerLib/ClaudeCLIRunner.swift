@@ -44,7 +44,7 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
 
         let escapedPrompt = prompt
             .replacingOccurrences(of: "'", with: "'\\''")
-        var claudeCmd = "claude -p '\(escapedPrompt)' --output-format json"
+        var claudeCmd = "claude -p '\(escapedPrompt)' --output-format json --model claude-sonnet-4-6"
         if let sid = sessionId {
             claudeCmd += " --resume '\(sid)'"
         }
