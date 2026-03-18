@@ -42,7 +42,9 @@
             var pre = el.parentElement;
             var div = document.createElement('pre');
             div.className = 'mermaid';
-            div.textContent = el.textContent;
+            // Replace literal \n with <br> for line breaks in labels (GitHub compat)
+            var mermaidText = el.textContent.replace(/\\n/g, '<br/>');
+            div.innerHTML = mermaidText;
             pre.replaceWith(div);
         });
 
@@ -80,7 +82,10 @@
             mermaid.initialize({
                 startOnLoad: false,
                 theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
-                securityLevel: 'strict'
+                securityLevel: 'loose',
+                flowchart: { htmlLabels: true, useMaxWidth: true },
+                sequence: { useMaxWidth: true },
+                gantt: { useMaxWidth: true }
             });
             mermaid.run()
                 .then(addDiagramCopyButtons)
