@@ -87,6 +87,9 @@ struct ToggleTOCKey: FocusedValueKey {
 struct ToggleDiffKey: FocusedValueKey {
     typealias Value = () -> Void
 }
+struct ToggleChatKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
 struct ExportHTMLKey: FocusedValueKey {
     typealias Value = () -> Void
 }
@@ -137,6 +140,10 @@ public extension FocusedValues {
     var toggleDiff: (() -> Void)? {
         get { self[ToggleDiffKey.self] }
         set { self[ToggleDiffKey.self] = newValue }
+    }
+    var toggleChat: (() -> Void)? {
+        get { self[ToggleChatKey.self] }
+        set { self[ToggleChatKey.self] = newValue }
     }
     var exportHTML: (() -> Void)? {
         get { self[ExportHTMLKey.self] }
@@ -189,6 +196,9 @@ public struct ContentView: View {
     @State private var editingNoteIndex: Int?
     @State private var insertAfterHeading: String?
     @State private var voiceInputEnabled = false
+    @State private var showChat = false
+    @State private var chatPanelHeight: CGFloat = 250
+    @State private var chatDragStartHeight: CGFloat? = nil
     @FocusState private var isSearchFocused: Bool
     @FocusState private var isNoteFocused: Bool
 
@@ -260,6 +270,12 @@ public struct ContentView: View {
                     onEditNote: { index, content in openNoteEditor(index: index, content: content) },
                     onAddNoteAtHeading: { heading in openNoteEditor(afterHeading: heading) }
                 )
+
+                if showChat {
+                    chatDivider
+                    ChatPanelView(fileURL: fileURL)
+                        .frame(height: chatPanelHeight)
+                }
             }
             if showComments {
                 Divider()
@@ -290,6 +306,7 @@ public struct ContentView: View {
         .focusedValue(\.zoomReset, { zoomLevel = 1.0 })
         .focusedValue(\.toggleTOC, { showTOC.toggle() })
         .focusedValue(\.toggleDiff, toggleDiff)
+        .focusedValue(\.toggleChat, { showChat.toggle() })
         .focusedValue(\.setAppearance, { mode in appearanceMode = mode })
         .onExitCommand {
             if showSearch { dismissSearch() }
@@ -435,6 +452,9 @@ public struct ContentView: View {
                 openNoteEditor()
             }
             .help("Add a review note — saved as ```review block in the file (Cmd+Shift+N)")
+            actionButton("Chat", icon: "bubble.left.and.bubble.right", active: showChat) {
+                showChat.toggle()
+            }
 
             Spacer()
 
@@ -739,6 +759,39 @@ public struct ContentView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(.bar)
+    }
+
+    // MARK: - Chat Divider
+
+    private var chatDivider: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(height: 6)
+            .overlay(
+                Rectangle()
+                    .fill(Color(nsColor: .separatorColor))
+                    .frame(height: 1)
+            )
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.resizeUpDown.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        if chatDragStartHeight == nil {
+                            chatDragStartHeight = chatPanelHeight
+                        }
+                        chatPanelHeight = max(100, min(600, (chatDragStartHeight ?? 250) - value.translation.height))
+                    }
+                    .onEnded { _ in
+                        chatDragStartHeight = nil
+                    }
+            )
     }
 
     // MARK: - Actions
