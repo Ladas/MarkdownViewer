@@ -74,6 +74,33 @@
         color: rgba(175, 82, 222, 0.5);
     }
     @keyframes blink { 50% { opacity: 0; } }
+    .message-status {
+        background: rgba(142, 142, 147, 0.08);
+        border-left: 3px solid rgba(142, 142, 147, 0.3);
+        font-size: 11px;
+        color: #8b949e;
+    }
+    @media (prefers-color-scheme: dark) {
+        .message-status {
+            background: rgba(142, 142, 147, 0.12);
+            border-left-color: rgba(142, 142, 147, 0.4);
+        }
+    }
+    .message-status .message-label { color: rgba(142, 142, 147, 0.7); }
+    .message-status pre {
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-size: 10px;
+        margin: 0;
+        padding: 4px 6px;
+        background: rgba(0,0,0,0.04);
+        border-radius: 4px;
+    }
+    @media (prefers-color-scheme: dark) {
+        .message-status pre {
+            background: rgba(255,255,255,0.06);
+        }
+    }
     #empty-state {
         text-align: center;
         padding: 32px 16px;
@@ -214,6 +241,28 @@
             messagesEl.appendChild(streamingEl);
             scrollToBottom();
         }
+    }
+
+    function showStatus(text) {
+        emptyState.style.display = 'none';
+        var div = document.createElement('div');
+        div.className = 'message message-status';
+
+        var label = document.createElement('div');
+        label.className = 'message-label';
+        label.textContent = 'System';
+        div.appendChild(label);
+
+        var body = document.createElement('div');
+        body.className = 'markdown-body';
+        // Show as preformatted text to preserve CLI formatting
+        var pre = document.createElement('pre');
+        pre.textContent = text;
+        body.appendChild(pre);
+        div.appendChild(body);
+
+        messagesEl.appendChild(div);
+        scrollToBottom();
     }
 
     function loadHistory(messages) {

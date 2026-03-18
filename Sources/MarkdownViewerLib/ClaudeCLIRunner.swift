@@ -2,6 +2,7 @@ import Foundation
 
 public final class ClaudeCLIRunner: @unchecked Sendable {
     private var process: Process?
+    private var stdinPipe: Pipe?
     private let workingDirectory: URL
 
     public init(workingDirectory: URL) {
@@ -25,6 +26,12 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
         return nil
     }
 
+    /// Send text to the running process's stdin (e.g. approval responses)
+    public func sendInput(_ text: String) {
+        guard let data = text.data(using: .utf8) else { return }
+        stdinPipe?.fileHandleForWriting.write(data)
+    }
+
     /// Run claude CLI with a prompt, streaming output line by line.
     /// Executes via the user's login shell so PATH resolution works correctly
     /// even when launched from a GUI app (which has a minimal PATH).
@@ -33,6 +40,7 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
         allowEditing: Bool = false,
         sessionId: String? = nil,
         onOutput: @escaping @Sendable (String) -> Void,
+        onStderr: @escaping @Sendable (String) -> Void = { _ in },
         onComplete: @escaping @Sendable (Int32) -> Void
     ) {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
@@ -61,11 +69,13 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
+        let stdinPipe = Pipe()
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
-        process.standardInput = FileHandle.nullDevice
+        process.standardInput = stdinPipe
 
         self.process = process
+        self.stdinPipe = stdinPipe
 
         let outHandle = stdoutPipe.fileHandleForReading
         outHandle.readabilityHandler = { handle in
@@ -81,8 +91,23 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
             }
         }
 
+        let errHandle = stderrPipe.fileHandleForReading
+        errHandle.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty {
+                errHandle.readabilityHandler = nil
+                return
+            }
+            if let str = String(data: data, encoding: .utf8) {
+                DispatchQueue.main.async {
+                    onStderr(str)
+                }
+            }
+        }
+
         process.terminationHandler = { proc in
             outHandle.readabilityHandler = nil
+            errHandle.readabilityHandler = nil
             DispatchQueue.main.async {
                 onComplete(proc.terminationStatus)
             }
@@ -99,5 +124,6 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
     public func cancel() {
         process?.terminate()
         process = nil
+        stdinPipe = nil
     }
 }

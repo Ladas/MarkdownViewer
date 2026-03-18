@@ -7,6 +7,7 @@ struct ChatWebView: NSViewRepresentable {
     let messages: [ChatMessage]
     let streamingText: String
     let isStreaming: Bool
+    let statusText: String
 
     func makeNSView(context: Context) -> WKWebView {
         let webView = WKWebView(frame: .zero)
@@ -38,6 +39,12 @@ struct ChatWebView: NSViewRepresentable {
             coord.finalizeStreaming(in: webView)
         }
         coord.wasStreaming = isStreaming
+
+        // Show status text (stderr) if changed
+        if !statusText.isEmpty && statusText != coord.lastStatusText {
+            coord.lastStatusText = statusText
+            coord.showStatus(statusText, in: webView)
+        }
     }
 
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
@@ -53,6 +60,7 @@ struct ChatWebView: NSViewRepresentable {
         var pageLoaded = false
         var lastMessageCount = 0
         var wasStreaming = false
+        var lastStatusText = ""
         var pendingMessages: [ChatMessage]?
         var pendingStreaming: String?
 
@@ -93,6 +101,12 @@ struct ChatWebView: NSViewRepresentable {
             webView.evaluateJavaScript("finalizeStreaming('\(ts)')") { _, _ in }
         }
 
+        func showStatus(_ text: String, in webView: WKWebView) {
+            guard let data = try? JSONEncoder().encode(text),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            webView.evaluateJavaScript("showStatus(\(json))") { _, _ in }
+        }
+
         func webView(
             _ webView: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,
@@ -121,11 +135,21 @@ struct ChatPanelView: View {
     @State private var inputText = ""
     @State private var isLoading = false
     @State private var streamingResponse = ""
+    @State private var stderrBuffer = ""
+    @State private var lastShownStderr = ""
+    @State private var pendingApproval: String? = nil
     @State private var historyManager: ChatHistoryManager?
     @State private var cliRunner: ClaudeCLIRunner?
     @State private var gitRoot: URL?
     @State private var allowEditing = false
     @FocusState private var isInputFocused: Bool
+
+    /// Patterns in stderr that indicate Claude is asking for tool approval
+    private static let approvalPatterns = [
+        "allow", "Allow", "permission", "approve",
+        "(y/n)", "(Y/n)", "(yes/no)", "yes/no",
+        "Do you want", "Would you like"
+    ]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -168,8 +192,15 @@ struct ChatPanelView: View {
             ChatWebView(
                 messages: messages,
                 streamingText: streamingResponse,
-                isStreaming: isLoading
+                isStreaming: isLoading,
+                statusText: lastShownStderr
             )
+
+            // Approval bar — shown when Claude asks for permission
+            if let approval = pendingApproval {
+                Divider()
+                approvalBar(approval)
+            }
 
             Divider()
 
@@ -217,6 +248,87 @@ struct ChatPanelView: View {
         .onAppear { setupChat() }
     }
 
+    // MARK: - Approval Bar
+
+    private func approvalBar(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "lock.shield")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
+                    .padding(.top, 1)
+
+                Text(cleanApprovalText(text))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.primary)
+                    .lineLimit(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            HStack(spacing: 8) {
+                Button(action: { respondToApproval("y\n") }) {
+                    Label("Allow", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+                .controlSize(.small)
+
+                Button(action: { respondToApproval("n\n") }) {
+                    Label("Deny", systemImage: "xmark.circle.fill")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .controlSize(.small)
+
+                Spacer()
+
+                Button(action: { respondToApproval("y\n") }) {
+                    Text("Always allow")
+                        .font(.system(size: 10))
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("Allow this and future tool uses in this session")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.08))
+    }
+
+    /// Strip ANSI escape codes and clean up the approval text for display
+    private func cleanApprovalText(_ text: String) -> String {
+        // Remove ANSI escape sequences
+        var cleaned = text.replacingOccurrences(
+            of: "\\x1B\\[[0-9;]*[a-zA-Z]|\\x1B\\([a-zA-Z]",
+            with: "",
+            options: .regularExpression
+        )
+        // Also remove raw ESC characters
+        cleaned = cleaned.replacingOccurrences(
+            of: "\u{1B}\\[[0-9;]*[a-zA-Z]|\u{1B}\\([a-zA-Z]",
+            with: "",
+            options: .regularExpression
+        )
+        // Remove box-drawing characters
+        cleaned = cleaned.replacingOccurrences(
+            of: "[╭╮╰╯│─┌┐└┘├┤┬┴┼]+",
+            with: "",
+            options: .regularExpression
+        )
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func respondToApproval(_ response: String) {
+        cliRunner?.sendInput(response)
+        pendingApproval = nil
+        stderrBuffer = ""
+    }
+
+    // MARK: - Setup & Actions
+
     private func setupChat() {
         guard let url = fileURL else { return }
 
@@ -259,6 +371,9 @@ struct ChatPanelView: View {
         inputText = ""
         isLoading = true
         streamingResponse = ""
+        stderrBuffer = ""
+        lastShownStderr = ""
+        pendingApproval = nil
 
         cliRunner?.run(
             prompt: buildPrompt(prompt),
@@ -269,6 +384,12 @@ struct ChatPanelView: View {
                     streamingResponse += chunk
                 }
             },
+            onStderr: { [self] chunk in
+                MainActor.assumeIsolated {
+                    stderrBuffer += chunk
+                    handleStderr()
+                }
+            },
             onComplete: { [self] _ in
                 MainActor.assumeIsolated {
                     let response = streamingResponse.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -277,11 +398,35 @@ struct ChatPanelView: View {
                         messages.append(assistantMessage)
                         historyManager?.append(assistantMessage)
                     }
+                    // Show any remaining stderr as status if no response was received
+                    if response.isEmpty && !stderrBuffer.isEmpty && pendingApproval == nil {
+                        lastShownStderr = stderrBuffer
+                    }
                     streamingResponse = ""
+                    stderrBuffer = ""
                     isLoading = false
+                    pendingApproval = nil
                 }
             }
         )
+    }
+
+    /// Analyze stderr buffer for approval prompts or error messages
+    private func handleStderr() {
+        let buffer = stderrBuffer
+
+        // Check if this looks like an approval prompt
+        let looksLikeApproval = Self.approvalPatterns.contains { buffer.contains($0) }
+        if looksLikeApproval {
+            pendingApproval = buffer
+            return
+        }
+
+        // For non-approval stderr, show it as a status message if it's substantial
+        // (skip tiny fragments that are part of ongoing output)
+        if buffer.count > 20 && buffer.contains("\n") {
+            lastShownStderr = buffer
+        }
     }
 
     private func cancelRequest() {
@@ -292,11 +437,14 @@ struct ChatPanelView: View {
             historyManager?.append(partial)
         }
         streamingResponse = ""
+        stderrBuffer = ""
         isLoading = false
+        pendingApproval = nil
     }
 
     private func clearHistory() {
         messages = []
         historyManager?.clear()
+        lastShownStderr = ""
     }
 }
