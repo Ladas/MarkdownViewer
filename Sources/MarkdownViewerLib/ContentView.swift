@@ -623,9 +623,9 @@ public struct ContentView: View {
         let noteBlock = "\n\n```review\n\(trimmed)\n```\n"
 
         if let index = editingNoteIndex {
-            content = replaceReviewBlock(at: index, with: trimmed, in: content)
+            content = ReviewNote.replace(at: index, with: trimmed, in: content)
         } else if let heading = insertAfterHeading, !heading.isEmpty {
-            content = insertAfterHeadingText(heading, note: noteBlock, in: content)
+            content = ReviewNote.insertAfterHeading(heading, note: noteBlock, in: content)
         } else {
             content += noteBlock
         }
@@ -640,87 +640,13 @@ public struct ContentView: View {
 
     private func deleteNote() {
         guard let url = fileURL, let index = editingNoteIndex else { return }
-        let content = replaceReviewBlock(at: index, with: nil, in: currentText)
+        let content = ReviewNote.replace(at: index, with: nil, in: currentText)
         try? content.write(to: url, atomically: true, encoding: .utf8)
 
         showNoteEditor = false
         noteContent = ""
         editingNoteIndex = nil
         insertAfterHeading = nil
-    }
-
-    private func replaceReviewBlock(at index: Int, with newContent: String?, in text: String) -> String {
-        let pattern = "```review\\n[\\s\\S]*?\\n```"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
-        let nsText = text as NSString
-        let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
-        guard index < matches.count else { return text }
-
-        let match = matches[index]
-        var result = text
-        let range = Range(match.range, in: text)!
-        if let newContent = newContent {
-            result.replaceSubrange(range, with: "```review\n\(newContent)\n```")
-        } else {
-            // Delete: also remove surrounding blank lines
-            let start = text.index(range.lowerBound, offsetBy: 0)
-            var end = range.upperBound
-            // Consume trailing newlines
-            while end < text.endIndex && text[end] == "\n" {
-                end = text.index(after: end)
-            }
-            // Consume leading newlines
-            var actualStart = start
-            if actualStart > text.startIndex {
-                let before = text.index(before: actualStart)
-                if text[before] == "\n" {
-                    actualStart = before
-                    if actualStart > text.startIndex {
-                        let before2 = text.index(before: actualStart)
-                        if text[before2] == "\n" {
-                            actualStart = before2
-                        }
-                    }
-                }
-            }
-            result.replaceSubrange(actualStart..<end, with: "")
-        }
-        return result
-    }
-
-    private func insertAfterHeadingText(_ headingText: String, note: String, in text: String) -> String {
-        let lines = text.components(separatedBy: "\n")
-        var insertIndex = lines.count
-        var inCodeBlock = false
-
-        for (i, line) in lines.enumerated() {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("```") { inCodeBlock = !inCodeBlock; continue }
-            if inCodeBlock { continue }
-
-            if let match = trimmed.range(of: "^#{1,6}\\s+", options: .regularExpression) {
-                var title = String(trimmed[match.upperBound...])
-                if let trailing = title.range(of: "\\s+#+\\s*$", options: .regularExpression) {
-                    title = String(title[..<trailing.lowerBound])
-                }
-                if title == headingText {
-                    // Find the end of this section (next heading or end)
-                    for j in (i + 1)..<lines.count {
-                        let nextTrimmed = lines[j].trimmingCharacters(in: .whitespaces)
-                        if nextTrimmed.range(of: "^#{1,6}\\s+", options: .regularExpression) != nil {
-                            insertIndex = j
-                            break
-                        }
-                    }
-                    if insertIndex == lines.count { insertIndex = lines.count }
-                    break
-                }
-            }
-        }
-
-        var result = lines
-        result.insert(contentsOf: note.components(separatedBy: "\n"), at: insertIndex)
-        return result.joined(separator: "\n")
     }
 
     // MARK: - File Watcher
