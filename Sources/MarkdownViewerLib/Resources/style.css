@@ -25,21 +25,6 @@ body {
     margin: 16px 0;
 }
 
-/* Fix mermaid node clipping for multi-line text */
-.mermaid .node rect,
-.mermaid .node circle,
-.mermaid .node ellipse,
-.mermaid .node polygon,
-.mermaid .node path {
-    overflow: visible;
-}
-.mermaid .node foreignObject {
-    overflow: visible;
-}
-.mermaid .label {
-    overflow: visible;
-}
-
 .mermaid-container {
     position: relative;
 }
