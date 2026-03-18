@@ -448,6 +448,11 @@
         postToHandler('addNoteAtHeading', { heading: headingText });
     });
 
+    // Show link URLs on hover via title attribute
+    document.querySelectorAll('#content a[href]').forEach(function(a) {
+        if (!a.title) a.title = a.getAttribute('href');
+    });
+
     // Anchor link scrolling (loadHTMLString has no base URL, so handle in JS)
     document.addEventListener('click', function(e) {
         var link = e.target.closest('a');
@@ -466,17 +471,28 @@
         document.getElementById('content').style.maxWidth = px + 'px';
     }
 
-    // Appearance override
+    // Appearance override — forces both colorScheme meta and CSS overrides
     function setAppearance(mode) {
+        // Update or create color-scheme meta tag
+        var meta = document.querySelector('meta[name="color-scheme"]');
+        if (!meta) {
+            meta = document.createElement('meta');
+            meta.name = 'color-scheme';
+            document.head.appendChild(meta);
+        }
+
         if (mode === 'light') {
-            document.documentElement.style.colorScheme = 'light';
+            meta.content = 'light';
+            document.documentElement.style.colorScheme = 'light only';
             document.documentElement.classList.remove('dark-override');
             document.documentElement.classList.add('light-override');
         } else if (mode === 'dark') {
-            document.documentElement.style.colorScheme = 'dark';
+            meta.content = 'dark';
+            document.documentElement.style.colorScheme = 'dark only';
             document.documentElement.classList.remove('light-override');
             document.documentElement.classList.add('dark-override');
         } else {
+            meta.content = 'light dark';
             document.documentElement.style.colorScheme = '';
             document.documentElement.classList.remove('light-override', 'dark-override');
         }
