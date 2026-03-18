@@ -526,3 +526,8 @@ This document covers the core architecture well. Consider adding:
 ---
 
 *Document generated for MarkdownViewer rendering test — covers tables, mermaid (flowchart, sequence, state, mindmap, pie, xychart, gantt), code blocks, task lists, math, blockquotes, badges, and review notes.*
+
+
+```review
+I rename this
+```

@@ -10,6 +10,15 @@ public enum ViewMode: String, CaseIterable {
     case sourceHTML = "Source HTML"
 }
 
+// MARK: - Resolved Notes
+
+public struct ResolvedBatch: Identifiable {
+    public let id = UUID()
+    public let resolvedAt: Date
+    public let notes: [String]
+    public let diff: String
+}
+
 // MARK: - TOC Entry
 
 public struct TOCEntry: Identifiable {
@@ -172,6 +181,9 @@ public struct ContentView: View {
     @State private var appearanceMode = "auto"
     @State private var contentWidth: Double = 980
     @State private var viewMode: ViewMode = .preview
+    @State private var showComments = false
+    @State private var resolvedNotes: [ResolvedBatch] = []
+    @State private var previousNotes: [String] = []
     @State private var showNoteEditor = false
     @State private var noteContent = ""
     @State private var editingNoteIndex: Int?
@@ -187,6 +199,18 @@ public struct ContentView: View {
     }
 
     @State private var tocEntries: [TOCEntry] = []
+
+    private var activeNotes: [String] {
+        ReviewNote.extract(from: currentText)
+    }
+
+    private var commentsButtonLabel: String {
+        let active = activeNotes.count
+        let resolved = resolvedNotes.flatMap(\.notes).count
+        if active == 0 && resolved == 0 { return "Comments" }
+        if resolved == 0 { return "\(active)" }
+        return "\(active)/\(resolved)"
+    }
 
     private var effectiveOverrideHTML: String? {
         if showDiff { return diffHTML }
@@ -237,6 +261,10 @@ public struct ContentView: View {
                     onAddNoteAtHeading: { heading in openNoteEditor(afterHeading: heading) }
                 )
             }
+            if showComments {
+                Divider()
+                commentsPanel
+            }
         }
         .frame(minWidth: 600, minHeight: 400)
         .overlay(alignment: .topTrailing) {
@@ -268,6 +296,7 @@ public struct ContentView: View {
         }
         .onAppear {
             tocEntries = TOCEntry.parse(from: currentText)
+            previousNotes = ReviewNote.extract(from: currentText)
             startFileWatcher()
             checkGitRepo()
         }
@@ -278,6 +307,7 @@ public struct ContentView: View {
         .onChange(of: currentText) { _ in
             tocEntries = TOCEntry.parse(from: currentText)
             if showDiff { updateDiff() }
+            detectResolvedNotes()
         }
         .sheet(isPresented: $showNoteEditor) {
             noteEditorSheet
@@ -389,8 +419,24 @@ public struct ContentView: View {
     // MARK: - Action Bar
 
     private var actionBar: some View {
-        HStack(spacing: 6) {
-            // View mode
+        HStack(spacing: 4) {
+            // Left: navigation
+            actionButton("Contents", icon: "list.bullet.indent", active: showTOC) {
+                showTOC.toggle()
+            }
+            if isGitRepo {
+                actionButton("Diff", icon: "arrow.left.arrow.right", active: showDiff) {
+                    toggleDiff()
+                }
+            }
+            actionButton("Note", icon: "plus.bubble") {
+                openNoteEditor()
+            }
+            .help("Add review note (Cmd+Shift+N or Cmd+double-click)")
+
+            Spacer()
+
+            // Center: view mode
             Picker("", selection: $viewMode) {
                 ForEach(ViewMode.allCases, id: \.self) { mode in
                     Text(mode.rawValue).tag(mode)
@@ -399,29 +445,13 @@ public struct ContentView: View {
             .pickerStyle(.segmented)
             .frame(width: 220)
 
-            // Navigation
-            actionButton("Contents", icon: "list.bullet.indent", active: showTOC) {
-                showTOC.toggle()
-            }
-            if isGitRepo {
-                actionButton("Git Diff", icon: "arrow.left.arrow.right", active: showDiff) {
-                    toggleDiff()
-                }
-            }
-            actionButton("Note", icon: "plus.bubble") {
-                openNoteEditor()
-            }
-            .help("Add review note (or Cmd+double-click in document)")
-
             Spacer()
 
-            // Width slider
+            // Right: width + copy/export
             Slider(value: $contentWidth, in: 400...2400, step: 20)
-                .frame(width: 70)
+                .frame(width: 60)
                 .controlSize(.mini)
                 .help("Content width: \(Int(contentWidth))px")
-
-            // Copy/export
             if let url = fileURL {
                 actionButton("Path", icon: "doc.on.clipboard") {
                     NSPasteboard.general.clearContents()
@@ -430,18 +460,16 @@ public struct ContentView: View {
                 }
                 .help(url.path)
             }
-            actionButton("MD", icon: "doc.on.doc") {
-                copySource()
+            actionButton(commentsButtonLabel, icon: "bubble.left.and.bubble.right", active: showComments) {
+                showComments.toggle()
             }
-            .help("Copy markdown source")
-            actionButton("HTML", icon: "doc.richtext") {
-                copyRendered()
-            }
-            .help("Copy as HTML")
-            actionButton("Export", icon: "square.and.arrow.up") {
-                exportHTML()
-            }
-            .help("Export HTML file")
+            .help("Toggle comments panel")
+            actionButton("MD", icon: "doc.on.doc") { copySource() }
+                .help("Copy markdown source")
+            actionButton("HTML", icon: "doc.richtext") { copyRendered() }
+                .help("Copy as HTML")
+            actionButton("Export", icon: "square.and.arrow.up") { exportHTML() }
+                .help("Export HTML file")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -457,6 +485,151 @@ public struct ContentView: View {
         .buttonStyle(.bordered)
         .controlSize(.small)
         .tint(active ? .accentColor : nil)
+    }
+
+    // MARK: - Comments Panel
+
+    private var commentsPanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Comments")
+                    .font(.headline)
+                Spacer()
+                if !resolvedNotes.isEmpty {
+                    Button("Clear Resolved") {
+                        resolvedNotes.removeAll()
+                    }
+                    .font(.caption)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    if !activeNotes.isEmpty {
+                        Text("Active (\(activeNotes.count))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+
+                        ForEach(Array(activeNotes.enumerated()), id: \.offset) { index, note in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(note)
+                                    .font(.system(size: 11))
+                                    .lineLimit(3)
+                                HStack(spacing: 4) {
+                                    Button("Edit") {
+                                        openNoteEditor(index: index, content: note)
+                                    }
+                                    .font(.caption2)
+                                    Button("Delete") {
+                                        deleteNoteAt(index)
+                                    }
+                                    .font(.caption2)
+                                    .foregroundStyle(.red)
+                                }
+                            }
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.accentColor.opacity(0.08))
+                            .cornerRadius(6)
+                            .padding(.horizontal, 8)
+                        }
+                    }
+
+                    if !resolvedNotes.isEmpty {
+                        Text("Resolved (\(resolvedNotes.flatMap(\.notes).count))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.top, activeNotes.isEmpty ? 0 : 8)
+
+                        ForEach(resolvedNotes) { batch in
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(batch.notes, id: \.self) { note in
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.green)
+                                            .font(.caption)
+                                        Text(note)
+                                            .font(.system(size: 11))
+                                            .lineLimit(2)
+                                            .strikethrough()
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Text(batch.resolvedAt, style: .relative)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                                if !batch.diff.isEmpty {
+                                    DisclosureGroup("View Diff") {
+                                        Text(batch.diff)
+                                            .font(.system(size: 10, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                            .textSelection(.enabled)
+                                    }
+                                    .font(.caption2)
+                                }
+                            }
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.green.opacity(0.05))
+                            .cornerRadius(6)
+                            .padding(.horizontal, 8)
+                        }
+                    }
+
+                    if activeNotes.isEmpty && resolvedNotes.isEmpty {
+                        Text("No review notes yet.\nCmd+double-click to add one.")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .padding(12)
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+        }
+        .frame(width: 260)
+        .background(.background)
+    }
+
+    private func deleteNoteAt(_ index: Int) {
+        guard let url = fileURL else { return }
+        let content = ReviewNote.replace(at: index, with: nil, in: currentText)
+        try? content.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func detectResolvedNotes() {
+        let newNotes = ReviewNote.extract(from: currentText)
+        let disappeared = previousNotes.filter { !newNotes.contains($0) }
+
+        if !disappeared.isEmpty {
+            let diff = computeSimpleDiff(old: previousNotes, new: newNotes)
+            let batch = ResolvedBatch(
+                resolvedAt: Date(),
+                notes: disappeared,
+                diff: diff
+            )
+            resolvedNotes.insert(batch, at: 0)
+        }
+
+        previousNotes = newNotes
+    }
+
+    private func computeSimpleDiff(old: [String], new: [String]) -> String {
+        var lines = [String]()
+        for note in old where !new.contains(note) {
+            lines.append("- \(note.prefix(60))...")
+        }
+        for note in new where !old.contains(note) {
+            lines.append("+ \(note.prefix(60))...")
+        }
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - Search Bar
