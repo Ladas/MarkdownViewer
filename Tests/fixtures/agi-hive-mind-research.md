@@ -61,6 +61,12 @@ Biological swarm systems exhibit these properties:
 - **Negative feedback** — unsuccessful paths naturally pruned
 - **Redundancy** — individual failure doesn't collapse the system
 
+
+
+```review
+rename maybe?
+```
+
 ### 2.3 Comparison of Approaches
 
 | Approach | Agents | Communication | Emergent Behavior | Scalability |

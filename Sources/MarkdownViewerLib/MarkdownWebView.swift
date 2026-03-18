@@ -269,11 +269,6 @@ struct MarkdownWebView: NSViewRepresentable {
         ) {
             if navigationAction.navigationType == .linkActivated,
                let url = navigationAction.request.url {
-                // Allow anchor links (fragment-only) to scroll within the page
-                if url.fragment != nil && (url.scheme == nil || url.scheme == "about") {
-                    decisionHandler(.allow)
-                    return
-                }
                 if let scheme = url.scheme?.lowercased(),
                    Self.allowedSchemes.contains(scheme) {
                     NSWorkspace.shared.open(url)
