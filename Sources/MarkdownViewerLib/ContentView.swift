@@ -2,6 +2,14 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+// MARK: - View Mode
+
+public enum ViewMode: String, CaseIterable {
+    case source = "Source"
+    case preview = "Preview"
+    case html = "HTML"
+}
+
 // MARK: - TOC Entry
 
 public struct TOCEntry: Identifiable {
@@ -163,6 +171,7 @@ public struct ContentView: View {
     @State private var fileWatcher: FileWatcher?
     @State private var appearanceMode = "auto"
     @State private var contentWidth: Double = 980
+    @State private var viewMode: ViewMode = .preview
     @State private var showNoteEditor = false
     @State private var noteContent = ""
     @State private var editingNoteIndex: Int?
@@ -178,6 +187,15 @@ public struct ContentView: View {
     }
 
     @State private var tocEntries: [TOCEntry] = []
+
+    private var effectiveOverrideHTML: String? {
+        if showDiff { return diffHTML }
+        switch viewMode {
+        case .preview: return nil
+        case .source: return SourceHighlighter.render(currentText)
+        case .html: return SourceHighlighter.renderHTMLPreview(currentText)
+        }
+    }
 
     public var body: some View {
         HStack(spacing: 0) {
@@ -198,7 +216,7 @@ public struct ContentView: View {
                 }
                 MarkdownWebView(
                     markdown: currentText,
-                    overrideHTML: showDiff ? diffHTML : nil,
+                    overrideHTML: effectiveOverrideHTML,
                     searchText: showSearch ? searchText : "",
                     navigationTrigger: navigationTrigger,
                     navigationForward: navigationForward,
@@ -382,6 +400,14 @@ public struct ContentView: View {
                 .buttonStyle(.plain)
                 .help("Click to copy path: \(url.path)")
             }
+
+            Picker("", selection: $viewMode) {
+                ForEach(ViewMode.allCases, id: \.self) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 180)
 
             actionButton("Contents", icon: "list.bullet.indent", active: showTOC) {
                 showTOC.toggle()
