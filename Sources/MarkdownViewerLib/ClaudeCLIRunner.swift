@@ -2,7 +2,6 @@ import Foundation
 
 public final class ClaudeCLIRunner: @unchecked Sendable {
     private var process: Process?
-    private var stdinPipe: Pipe?
     private let workingDirectory: URL
 
     public init(workingDirectory: URL) {
@@ -26,29 +25,26 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
         return nil
     }
 
-    /// Send text to the running process's stdin (e.g. approval responses)
-    public func sendInput(_ text: String) {
-        guard let data = text.data(using: .utf8) else { return }
-        stdinPipe?.fileHandleForWriting.write(data)
+    /// JSON response from `claude -p --output-format json`
+    public struct CLIResponse {
+        public let result: String
+        public let sessionId: String?
     }
 
-    /// Run claude CLI with a prompt, streaming output line by line.
-    /// Executes via the user's login shell so PATH resolution works correctly
-    /// even when launched from a GUI app (which has a minimal PATH).
+    /// Run claude CLI with a prompt using JSON output format.
+    /// Returns the full response and session ID for --resume support.
     public func run(
         prompt: String,
         allowEditing: Bool = false,
         sessionId: String? = nil,
         onOutput: @escaping @Sendable (String) -> Void,
-        onStderr: @escaping @Sendable (String) -> Void = { _ in },
-        onComplete: @escaping @Sendable (Int32) -> Void
+        onComplete: @escaping @Sendable (CLIResponse, Int32) -> Void
     ) {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
 
-        // Build the claude command with proper escaping
         let escapedPrompt = prompt
             .replacingOccurrences(of: "'", with: "'\\''")
-        var claudeCmd = "claude -p '\(escapedPrompt)'"
+        var claudeCmd = "claude -p '\(escapedPrompt)' --output-format json"
         if let sid = sessionId {
             claudeCmd += " --resume '\(sid)'"
         }
@@ -58,8 +54,6 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: shell)
-        // -l: login shell (sources .zprofile), -i: interactive (sources .zshrc)
-        // Together they ensure the user's full PATH is available
         process.arguments = ["-l", "-i", "-c", claudeCmd]
         process.currentDirectoryURL = workingDirectory
 
@@ -71,14 +65,12 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
         let stderrPipe = Pipe()
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
-        // Use nullDevice so claude -p doesn't block waiting for stdin.
-        // The -p flag is non-interactive — approvals are handled via
-        // --dangerously-skip-permissions toggle, not stdin interaction.
         process.standardInput = FileHandle.nullDevice
 
         self.process = process
-        self.stdinPipe = nil
 
+        // Accumulate all stdout data for JSON parsing
+        var stdoutData = Data()
         let outHandle = stdoutPipe.fileHandleForReading
         outHandle.readabilityHandler = { handle in
             let data = handle.availableData
@@ -86,6 +78,8 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
                 outHandle.readabilityHandler = nil
                 return
             }
+            stdoutData.append(data)
+            // Also stream raw chunks for a "thinking" indicator
             if let str = String(data: data, encoding: .utf8) {
                 DispatchQueue.main.async {
                     onOutput(str)
@@ -93,6 +87,8 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
             }
         }
 
+        // Capture stderr for error reporting
+        var stderrData = Data()
         let errHandle = stderrPipe.fileHandleForReading
         errHandle.readabilityHandler = { handle in
             let data = handle.availableData
@@ -100,32 +96,58 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
                 errHandle.readabilityHandler = nil
                 return
             }
-            if let str = String(data: data, encoding: .utf8) {
-                DispatchQueue.main.async {
-                    onStderr(str)
-                }
-            }
+            stderrData.append(data)
         }
 
         process.terminationHandler = { proc in
             outHandle.readabilityHandler = nil
             errHandle.readabilityHandler = nil
             DispatchQueue.main.async {
-                onComplete(proc.terminationStatus)
+                let response = Self.parseResponse(stdout: stdoutData, stderr: stderrData)
+                onComplete(response, proc.terminationStatus)
             }
         }
 
         do {
             try process.run()
         } catch {
-            onOutput("Error: Failed to launch shell: \(error.localizedDescription)")
-            onComplete(1)
+            let errorResponse = CLIResponse(result: "Error: Failed to launch shell: \(error.localizedDescription)", sessionId: nil)
+            onComplete(errorResponse, 1)
         }
+    }
+
+    /// Parse the JSON response from claude CLI
+    private static func parseResponse(stdout: Data, stderr: Data) -> CLIResponse {
+        // Try parsing stdout as JSON first
+        if let response = parseJSON(stdout) {
+            return response
+        }
+        // Claude also outputs JSON to stderr with --output-format json
+        if let response = parseJSON(stderr) {
+            return response
+        }
+        // Fallback: treat stdout as plain text
+        let text = String(data: stdout, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if text.isEmpty {
+            let errText = String(data: stderr, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return CLIResponse(result: errText.isEmpty ? "" : "Error: \(errText)", sessionId: nil)
+        }
+        return CLIResponse(result: text, sessionId: nil)
+    }
+
+    private static func parseJSON(_ data: Data) -> CLIResponse? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        let result = json["result"] as? String ?? ""
+        let sessionId = json["session_id"] as? String
+        return CLIResponse(result: result, sessionId: sessionId)
     }
 
     public func cancel() {
         process?.terminate()
         process = nil
-        stdinPipe = nil
     }
 }
