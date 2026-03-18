@@ -313,9 +313,13 @@ public struct ContentView: View {
                 .frame(minHeight: 120)
                 .focused($isNoteFocused)
 
-            Text("Tip: Cmd+double-click in the document to add a note at that section. Press Fn twice for voice dictation.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Cmd+double-click in the document to add a note at a section")
+                Text("Cmd+Shift+M to toggle voice input")
+                Text("Notes are saved as ```review blocks — Claude Code can read them")
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
 
             HStack {
                 Button("Cancel") {

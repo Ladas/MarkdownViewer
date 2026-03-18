@@ -67,6 +67,12 @@ Biological swarm systems exhibit these properties:
 rename maybe?
 ```
 
+
+
+```review
+test
+```
+
 ### 2.3 Comparison of Approaches
 
 | Approach | Agents | Communication | Emergent Behavior | Scalability |
