@@ -4,8 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https:;">
+          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https:; font-src data:;">
     <style>/* {{VENDOR_CSS}} */</style>
+    <style>/* {{FA_CSS}} */</style>
     <style>/* {{CSS}} */</style>
     <script>/* {{PURIFY_JS}} */</script>
     <script>/* {{MARKED_JS}} */</script>
@@ -195,19 +196,21 @@
         clone.querySelectorAll('table').forEach(function(table) {
             table.style.borderCollapse = 'collapse';
             table.style.borderSpacing = '0';
-            table.style.width = 'auto';
             table.style.marginBottom = '16px';
             table.style.fontSize = '14px';
+            table.setAttribute('cellpadding', '0');
+            table.setAttribute('cellspacing', '0');
         });
         clone.querySelectorAll('th').forEach(function(th) {
-            th.style.padding = '6px 13px';
+            th.style.padding = '8px 16px';
             th.style.border = '1px solid #d0d7de';
             th.style.fontWeight = '600';
             th.style.backgroundColor = '#f6f8fa';
             th.style.textAlign = 'left';
+            th.style.whiteSpace = 'nowrap';
         });
         clone.querySelectorAll('td').forEach(function(td) {
-            td.style.padding = '6px 13px';
+            td.style.padding = '8px 16px';
             td.style.border = '1px solid #d0d7de';
             td.style.textAlign = 'left';
         });
