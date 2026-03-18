@@ -63,10 +63,6 @@ body {
     }
 }
 
-body.pannable {
-    cursor: grab;
-}
-
 body.panning {
     cursor: grabbing;
     user-select: none;
