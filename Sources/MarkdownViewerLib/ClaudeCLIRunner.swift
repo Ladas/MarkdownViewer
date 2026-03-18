@@ -69,13 +69,15 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
-        let stdinPipe = Pipe()
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
-        process.standardInput = stdinPipe
+        // Use nullDevice so claude -p doesn't block waiting for stdin.
+        // The -p flag is non-interactive — approvals are handled via
+        // --dangerously-skip-permissions toggle, not stdin interaction.
+        process.standardInput = FileHandle.nullDevice
 
         self.process = process
-        self.stdinPipe = stdinPipe
+        self.stdinPipe = nil
 
         let outHandle = stdoutPipe.fileHandleForReading
         outHandle.readabilityHandler = { handle in
