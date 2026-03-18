@@ -50,6 +50,9 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
         }
         if allowEditing {
             claudeCmd += " --dangerously-skip-permissions"
+        } else {
+            // Block write tools when editing is disabled
+            claudeCmd += " --disallowedTools Edit Write Bash NotebookEdit"
         }
 
         let process = Process()
