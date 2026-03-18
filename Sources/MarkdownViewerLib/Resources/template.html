@@ -225,6 +225,45 @@
             });
         });
 
+        // Inline code block styles for Google Docs compatibility
+        clone.querySelectorAll('pre').forEach(function(pre) {
+            if (pre.classList.contains('mermaid')) return;
+            pre.style.backgroundColor = '#f6f8fa';
+            pre.style.borderRadius = '6px';
+            pre.style.padding = '16px';
+            pre.style.overflow = 'auto';
+            pre.style.fontSize = '13px';
+            pre.style.lineHeight = '1.45';
+            pre.style.marginBottom = '16px';
+        });
+        clone.querySelectorAll('code').forEach(function(code) {
+            code.style.fontFamily = 'SF Mono, Menlo, Consolas, monospace';
+            code.style.fontSize = '13px';
+            if (!code.parentElement || code.parentElement.tagName !== 'PRE') {
+                // Inline code
+                code.style.backgroundColor = 'rgba(175, 184, 193, 0.2)';
+                code.style.borderRadius = '3px';
+                code.style.padding = '2px 5px';
+            }
+        });
+        // Inline blockquote styles
+        clone.querySelectorAll('blockquote').forEach(function(bq) {
+            bq.style.borderLeft = '4px solid #d0d7de';
+            bq.style.color = '#656d76';
+            bq.style.paddingLeft = '16px';
+            bq.style.marginLeft = '0';
+        });
+        // Inline heading styles
+        clone.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h) {
+            h.style.fontWeight = '600';
+            h.style.marginTop = '24px';
+            h.style.marginBottom = '16px';
+        });
+        clone.querySelectorAll('h1,h2').forEach(function(h) {
+            h.style.borderBottom = '1px solid #d0d7de';
+            h.style.paddingBottom = '8px';
+        });
+
         clone.normalize();
         return clone;
     }
