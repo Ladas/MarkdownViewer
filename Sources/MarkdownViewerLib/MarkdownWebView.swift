@@ -21,6 +21,7 @@ struct MarkdownWebView: NSViewRepresentable {
     var onEditNote: ((Int, String) -> Void)?
     var onAddNoteAtHeading: ((String) -> Void)?
     var onExplainWithClaude: ((String) -> Void)?
+    var onAskClaude: ((String) -> Void)?
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -49,6 +50,7 @@ struct MarkdownWebView: NSViewRepresentable {
         coord.onEditNote = onEditNote
         coord.onAddNoteAtHeading = onAddNoteAtHeading
         coord.onExplainWithClaude = onExplainWithClaude
+        coord.onAskClaude = onAskClaude
 
         let contentChanged = coord.lastMarkdown != markdown || coord.lastOverrideHTML != overrideHTML
         if contentChanged {
@@ -153,6 +155,7 @@ struct MarkdownWebView: NSViewRepresentable {
         var onEditNote: ((Int, String) -> Void)?
         var onAddNoteAtHeading: ((String) -> Void)?
         var onExplainWithClaude: ((String) -> Void)?
+        var onAskClaude: ((String) -> Void)?
 
         // MARK: - WKScriptMessageHandler
 
@@ -291,18 +294,30 @@ class MarkdownWKWebView: WKWebView {
     weak var coordinator: MarkdownWebView.Coordinator?
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
-        // Add "Explain with Claude" after a separator
-        let separator = NSMenuItem.separator()
-        menu.addItem(separator)
+        menu.addItem(NSMenuItem.separator())
+
+        let claudeMenu = NSMenu(title: "Claude")
 
         let explainItem = NSMenuItem(
-            title: "Explain with Claude",
+            title: "Explain",
             action: #selector(explainWithClaude(_:)),
             keyEquivalent: ""
         )
         explainItem.target = self
-        explainItem.image = NSImage(systemSymbolName: "sparkle", accessibilityDescription: "Claude")
-        menu.addItem(explainItem)
+        claudeMenu.addItem(explainItem)
+
+        let askItem = NSMenuItem(
+            title: "Ask...",
+            action: #selector(askClaude(_:)),
+            keyEquivalent: ""
+        )
+        askItem.target = self
+        claudeMenu.addItem(askItem)
+
+        let claudeItem = NSMenuItem(title: "Claude", action: nil, keyEquivalent: "")
+        claudeItem.image = NSImage(systemSymbolName: "sparkle", accessibilityDescription: "Claude")
+        claudeItem.submenu = claudeMenu
+        menu.addItem(claudeItem)
 
         super.willOpenMenu(menu, with: event)
     }
@@ -311,6 +326,13 @@ class MarkdownWKWebView: WKWebView {
         evaluateJavaScript("window.getSelection().toString()") { [weak self] result, _ in
             guard let text = result as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             self?.coordinator?.onExplainWithClaude?(text)
+        }
+    }
+
+    @objc private func askClaude(_ sender: Any?) {
+        evaluateJavaScript("window.getSelection().toString()") { [weak self] result, _ in
+            guard let text = result as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            self?.coordinator?.onAskClaude?(text)
         }
     }
 }

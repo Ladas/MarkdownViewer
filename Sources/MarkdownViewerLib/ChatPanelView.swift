@@ -130,6 +130,7 @@ struct ChatWebView: NSViewRepresentable {
 struct ChatPanelView: View {
     let fileURL: URL?
     @Binding var pendingPrompt: String?
+    @Binding var pendingInput: String?
 
     @State private var messages: [ChatMessage] = []
     @State private var inputText = ""
@@ -232,13 +233,16 @@ struct ChatPanelView: View {
         }
         .onAppear {
             setupChat()
-            // Handle pending prompt from context menu (when panel was just opened)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 consumePendingPrompt()
+                consumePendingInput()
             }
         }
         .onChange(of: pendingPrompt) { _ in
             consumePendingPrompt()
+        }
+        .onChange(of: pendingInput) { _ in
+            consumePendingInput()
         }
     }
 
@@ -247,6 +251,14 @@ struct ChatPanelView: View {
             pendingPrompt = nil
             inputText = prompt
             sendMessage()
+        }
+    }
+
+    private func consumePendingInput() {
+        if let input = pendingInput, !input.isEmpty {
+            pendingInput = nil
+            inputText = input
+            isInputFocused = true
         }
     }
 
