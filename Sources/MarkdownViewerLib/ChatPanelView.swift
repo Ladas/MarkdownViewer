@@ -230,13 +230,23 @@ struct ChatPanelView: View {
             .padding(.vertical, 8)
             .background(.bar)
         }
-        .onAppear { setupChat() }
-        .onChange(of: pendingPrompt) { _ in
-            if let prompt = pendingPrompt {
-                pendingPrompt = nil
-                inputText = prompt
-                sendMessage()
+        .onAppear {
+            setupChat()
+            // Handle pending prompt from context menu (when panel was just opened)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                consumePendingPrompt()
             }
+        }
+        .onChange(of: pendingPrompt) { _ in
+            consumePendingPrompt()
+        }
+    }
+
+    private func consumePendingPrompt() {
+        if let prompt = pendingPrompt, !prompt.isEmpty {
+            pendingPrompt = nil
+            inputText = prompt
+            sendMessage()
         }
     }
 
