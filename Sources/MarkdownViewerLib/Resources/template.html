@@ -446,6 +446,11 @@
         }
     });
 
+    // Content width control
+    function setContentWidth(px) {
+        document.getElementById('content').style.maxWidth = px + 'px';
+    }
+
     // Appearance override
     function setAppearance(mode) {
         if (mode === 'light') {

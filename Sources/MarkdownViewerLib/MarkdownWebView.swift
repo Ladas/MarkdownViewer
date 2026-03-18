@@ -14,6 +14,7 @@ struct MarkdownWebView: NSViewRepresentable {
     var scrollToHeadingTrigger: Int = 0
     var scrollToHeadingIndex: Int = -1
     var appearanceMode: String = "auto"
+    var contentWidth: Double = 980
     var onSearchResult: ((Int, Int) -> Void)?
     var onCopyDone: (() -> Void)?
     var onExportHTML: ((String) -> Void)?
@@ -100,6 +101,13 @@ struct MarkdownWebView: NSViewRepresentable {
                 webView.evaluateJavaScript("setAppearance('\(escaped)')") { _, _ in }
             }
         }
+
+        if coord.lastContentWidth != contentWidth {
+            coord.lastContentWidth = contentWidth
+            if coord.pageLoaded {
+                webView.evaluateJavaScript("setContentWidth(\(Int(contentWidth)))") { _, _ in }
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -117,6 +125,7 @@ struct MarkdownWebView: NSViewRepresentable {
         var lastExportHTMLTrigger: Int = 0
         var lastScrollTrigger: Int = 0
         var lastAppearanceMode: String = "auto"
+        var lastContentWidth: Double = 980
         var pageLoaded = false
         var pendingSearch: String?
         var pendingAppearance: String?

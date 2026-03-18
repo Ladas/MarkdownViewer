@@ -162,6 +162,7 @@ public struct ContentView: View {
     @State private var scrollToHeadingIndex = -1
     @State private var fileWatcher: FileWatcher?
     @State private var appearanceMode = "auto"
+    @State private var contentWidth: Double = 980
     @State private var showNoteEditor = false
     @State private var noteContent = ""
     @State private var editingNoteIndex: Int?
@@ -209,6 +210,7 @@ public struct ContentView: View {
                     scrollToHeadingTrigger: scrollToHeadingTrigger,
                     scrollToHeadingIndex: scrollToHeadingIndex,
                     appearanceMode: appearanceMode,
+                    contentWidth: contentWidth,
                     onSearchResult: { total, current in
                         matchTotal = total
                         matchCurrent = current
@@ -386,6 +388,18 @@ public struct ContentView: View {
             }
 
             Spacer()
+
+            Image(systemName: "arrow.left.and.right")
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+            Slider(value: $contentWidth, in: 400...2400, step: 20)
+                .frame(width: 80)
+                .controlSize(.mini)
+                .help("Content width: \(Int(contentWidth))px")
+            Text("\(Int(contentWidth))")
+                .font(.system(size: 9).monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 28, alignment: .leading)
 
             actionButton("Copy MD", icon: "doc.on.doc") {
                 copySource()
