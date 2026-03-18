@@ -330,7 +330,7 @@ class MarkdownWKWebView: WKWebView {
     }
 
     @objc private func askClaude(_ sender: Any?) {
-        evaluateJavaScript("window.getSelection().toString()") { [weak self] result, _ in
+        evaluateJavaScript("var s = window.getSelection(); var t = s.toString(); s.removeAllRanges(); t") { [weak self] result, _ in
             guard let text = result as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             self?.coordinator?.onAskClaude?(text)
         }
