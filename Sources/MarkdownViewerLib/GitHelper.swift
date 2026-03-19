@@ -3,18 +3,19 @@ import Foundation
 public enum GitHelper {
 
     public static func isGitRepo(at fileURL: URL) -> Bool {
-        run(["rev-parse", "--git-dir"], in: fileURL.deletingLastPathComponent()) != nil
+        repoRoot(for: fileURL) != nil
     }
 
     public static func diff(for fileURL: URL, against ref: String = "HEAD") -> String? {
-        run(["diff", ref, "--", fileURL.path], in: fileURL.deletingLastPathComponent())
+        guard let root = repoRoot(for: fileURL) else { return nil }
+        return run(["diff", ref, "--", fileURL.path], in: root)
     }
 
     public static func availableRefs(for fileURL: URL) -> [String] {
-        let dir = fileURL.deletingLastPathComponent()
+        guard let root = repoRoot(for: fileURL) else { return ["HEAD"] }
         var refs = ["HEAD"]
         for remote in ["origin/main", "origin/master", "upstream/main", "upstream/master"] {
-            if run(["rev-parse", "--verify", remote], in: dir) != nil {
+            if run(["rev-parse", "--verify", remote], in: root) != nil {
                 refs.append(remote)
             }
         }
@@ -75,6 +76,16 @@ public enum GitHelper {
 
         lines.append("</body></html>")
         return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Private
+
+    private static func repoRoot(for fileURL: URL) -> URL? {
+        let dir = fileURL.deletingLastPathComponent()
+        guard let output = run(["rev-parse", "--show-toplevel"], in: dir) else { return nil }
+        let path = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !path.isEmpty else { return nil }
+        return URL(fileURLWithPath: path)
     }
 
     private static func run(_ arguments: [String], in directory: URL) -> String? {

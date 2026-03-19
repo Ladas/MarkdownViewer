@@ -22,7 +22,10 @@
         if (typeof marked !== 'undefined') {
             var rawHTML = marked.parse(markdown);
             if (typeof DOMPurify !== 'undefined') {
-                rawHTML = DOMPurify.sanitize(rawHTML);
+                rawHTML = DOMPurify.sanitize(rawHTML, {
+                    FORBID_TAGS: ['foreignObject'],
+                    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'xlink:href']
+                });
                 document.getElementById('content').innerHTML = rawHTML;
             } else {
                 // Fail closed: refuse to render unsanitized HTML
@@ -42,7 +45,9 @@
             var pre = el.parentElement;
             var div = document.createElement('pre');
             div.className = 'mermaid';
-            div.textContent = el.textContent;
+            // Replace literal \n with actual newlines for mermaid line breaks
+            // (safe: no innerHTML, mermaid in strict mode handles \n in labels)
+            div.textContent = el.textContent.replace(/\\n/g, '\n');
             pre.replaceWith(div);
         });
 
@@ -80,7 +85,10 @@
             mermaid.initialize({
                 startOnLoad: false,
                 theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
-                securityLevel: 'strict'
+                securityLevel: 'strict',
+                flowchart: { useMaxWidth: true },
+                sequence: { useMaxWidth: true },
+                gantt: { useMaxWidth: true }
             });
             mermaid.run()
                 .then(addDiagramCopyButtons)
@@ -191,6 +199,20 @@
             (container || pre).replaceWith(img);
         });
 
+        // Convert standalone SVGs to PNG for copy/export
+        var standaloneSvgs = clone.querySelectorAll('svg:not(.mermaid svg)');
+        for (var si = 0; si < standaloneSvgs.length; si++) {
+            var svg = standaloneSvgs[si];
+            if (svg.closest('.mermaid-container') || svg.closest('pre.mermaid')) continue;
+            try {
+                var pngUrl = await svgToPngDataUrl(svg);
+                var img = document.createElement('img');
+                img.src = pngUrl;
+                img.style.maxWidth = '100%';
+                svg.replaceWith(img);
+            } catch(e) {}
+        }
+
         // Inline table styles for Google Docs compatibility
         clone.querySelectorAll('table').forEach(function(table) {
             table.style.borderCollapse = 'collapse';
@@ -219,12 +241,52 @@
             });
         });
 
+        // Inline code block styles for Google Docs compatibility
+        clone.querySelectorAll('pre').forEach(function(pre) {
+            if (pre.classList.contains('mermaid')) return;
+            pre.style.backgroundColor = '#f6f8fa';
+            pre.style.borderRadius = '6px';
+            pre.style.padding = '16px';
+            pre.style.overflow = 'auto';
+            pre.style.fontSize = '13px';
+            pre.style.lineHeight = '1.45';
+            pre.style.marginBottom = '16px';
+        });
+        clone.querySelectorAll('code').forEach(function(code) {
+            code.style.fontFamily = 'SF Mono, Menlo, Consolas, monospace';
+            code.style.fontSize = '13px';
+            if (!code.parentElement || code.parentElement.tagName !== 'PRE') {
+                // Inline code
+                code.style.backgroundColor = 'rgba(175, 184, 193, 0.2)';
+                code.style.borderRadius = '3px';
+                code.style.padding = '2px 5px';
+            }
+        });
+        // Inline blockquote styles
+        clone.querySelectorAll('blockquote').forEach(function(bq) {
+            bq.style.borderLeft = '4px solid #d0d7de';
+            bq.style.color = '#656d76';
+            bq.style.paddingLeft = '16px';
+            bq.style.marginLeft = '0';
+        });
+        // Inline heading styles
+        clone.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h) {
+            h.style.fontWeight = '600';
+            h.style.marginTop = '24px';
+            h.style.marginBottom = '16px';
+        });
+        clone.querySelectorAll('h1,h2').forEach(function(h) {
+            h.style.borderBottom = '1px solid #d0d7de';
+            h.style.paddingBottom = '8px';
+        });
+
         clone.normalize();
         return clone;
     }
 
     // Build standalone HTML from rendered content
-    async function buildStandaloneHTML() {
+    // mode: 'auto' (include media queries), 'light', or 'dark'
+    async function buildStandaloneHTML(mode) {
         var clone = await prepareCleanContent();
 
         var styles = '';
@@ -232,12 +294,34 @@
             try {
                 var rules = document.styleSheets[i].cssRules;
                 for (var j = 0; j < rules.length; j++) {
-                    styles += rules[j].cssText + '\n';
+                    var rule = rules[j];
+                    if (mode === 'light' && rule.type === CSSRule.MEDIA_RULE &&
+                        rule.conditionText && rule.conditionText.indexOf('dark') !== -1) {
+                        continue; // Skip dark media queries in light mode
+                    }
+                    if (mode === 'dark' && rule.type === CSSRule.MEDIA_RULE &&
+                        rule.conditionText && rule.conditionText.indexOf('dark') !== -1) {
+                        // Extract dark rules as unconditional
+                        for (var k = 0; k < rule.cssRules.length; k++) {
+                            styles += rule.cssRules[k].cssText + '\n';
+                        }
+                        continue;
+                    }
+                    styles += rule.cssText + '\n';
                 }
             } catch(e) {}
         }
 
-        return '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>\n'
+        if (mode === 'light') {
+            styles += '\nbody { background: #ffffff !important; color: #1f2328 !important; }\n';
+        } else if (mode === 'dark') {
+            styles += '\nbody { background: #0d1117 !important; color: #e6edf3 !important; }\n';
+        }
+
+        var colorScheme = mode === 'dark' ? 'dark' : 'light';
+        var meta = mode !== 'auto' ? '<meta name="color-scheme" content="' + colorScheme + '">\n' : '';
+
+        return '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n' + meta + '<style>\n'
             + styles
             + '</style>\n</head>\n<body>\n<article class="markdown-body">\n'
             + clone.innerHTML
@@ -250,12 +334,12 @@
         }
     }
 
-    async function copyRenderedContent() {
-        postToHandler('copyRendered', await buildStandaloneHTML());
+    async function copyRenderedContent(mode) {
+        postToHandler('copyRendered', await buildStandaloneHTML(mode || 'auto'));
     }
 
-    async function exportHTMLContent() {
-        postToHandler('exportHTML', await buildStandaloneHTML());
+    async function exportHTMLContent(mode) {
+        postToHandler('exportHTML', await buildStandaloneHTML(mode || 'auto'));
     }
     </script>
 
@@ -428,6 +512,11 @@
         postToHandler('addNoteAtHeading', { heading: headingText });
     });
 
+    // Show link URLs on hover via title attribute
+    document.querySelectorAll('#content a[href]').forEach(function(a) {
+        if (!a.title) a.title = a.getAttribute('href');
+    });
+
     // Anchor link scrolling (loadHTMLString has no base URL, so handle in JS)
     document.addEventListener('click', function(e) {
         var link = e.target.closest('a');
@@ -441,26 +530,14 @@
         }
     });
 
+    // Mermaid theme change requires full page reload (SVGs have baked-in colors)
+    // The Swift side triggers a content reload which preserves scroll position
+
     // Content width control
     function setContentWidth(px) {
         document.getElementById('content').style.maxWidth = px + 'px';
     }
 
-    // Appearance override
-    function setAppearance(mode) {
-        if (mode === 'light') {
-            document.documentElement.style.colorScheme = 'light';
-            document.documentElement.classList.remove('dark-override');
-            document.documentElement.classList.add('light-override');
-        } else if (mode === 'dark') {
-            document.documentElement.style.colorScheme = 'dark';
-            document.documentElement.classList.remove('light-override');
-            document.documentElement.classList.add('dark-override');
-        } else {
-            document.documentElement.style.colorScheme = '';
-            document.documentElement.classList.remove('light-override', 'dark-override');
-        }
-    }
     </script>
 </body>
 </html>

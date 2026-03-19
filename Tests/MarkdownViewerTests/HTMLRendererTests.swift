@@ -124,4 +124,42 @@ struct ComposeTests {
         #expect(result.contains("<script>mermaid()</script>"))
         #expect(result.contains("# Test"))
     }
+
+    @Test func insertsPurifyJS() {
+        let result = HTMLRenderer.compose(
+            template: "<script>/* {{PURIFY_JS}} */</script>",
+            markdown: "",
+            css: "", vendorCSS: "", markedJS: "", mermaidJS: "", purifyJS: "var DOMPurify={};"
+        )
+        #expect(result.contains("var DOMPurify={};"))
+    }
+
+    @Test func insertsFACSS() {
+        let result = HTMLRenderer.compose(
+            template: "<style>/* {{FA_CSS}} */</style>",
+            markdown: "",
+            css: "", vendorCSS: "", markedJS: "", mermaidJS: "", faCSS: ".fa{display:inline}"
+        )
+        #expect(result.contains(".fa{display:inline}"))
+    }
+}
+
+@Suite("HTMLRenderer - Render")
+struct RenderTests {
+
+    @Test func renderProducesHTML() {
+        let result = HTMLRenderer.render(markdown: "# Hello")
+        #expect(result.contains("# Hello"))
+        #expect(result.contains("<!DOCTYPE html>") || result.contains("<html"))
+    }
+
+    @Test func renderEscapesContent() {
+        let result = HTMLRenderer.render(markdown: "has `backtick`")
+        #expect(result.contains("has \\`backtick\\`"))
+    }
+
+    @Test func renderEmptyMarkdown() {
+        let result = HTMLRenderer.render(markdown: "")
+        #expect(!result.isEmpty)
+    }
 }

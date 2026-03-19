@@ -9,7 +9,9 @@ struct MarkdownWebView: NSViewRepresentable {
     var navigationTrigger: Int = 0
     var navigationForward: Bool = true
     var copyRenderedTrigger: Int = 0
+    var copyHTMLMode: String = "auto"
     var exportHTMLTrigger: Int = 0
+    var exportHTMLMode: String = "auto"
     var zoomLevel: Double = 1.0
     var scrollToHeadingTrigger: Int = 0
     var scrollToHeadingIndex: Int = -1
@@ -91,14 +93,16 @@ struct MarkdownWebView: NSViewRepresentable {
         if copyChanged {
             coord.lastCopyRenderedTrigger = copyRenderedTrigger
             guard coord.pageLoaded else { return }
-            webView.evaluateJavaScript("copyRenderedContent()") { _, _ in }
+            let safeMode = copyHTMLMode.replacingOccurrences(of: "'", with: "")
+            webView.evaluateJavaScript("copyRenderedContent('\(safeMode)')") { _, _ in }
         }
 
         let exportChanged = coord.lastExportHTMLTrigger != exportHTMLTrigger
         if exportChanged {
             coord.lastExportHTMLTrigger = exportHTMLTrigger
             guard coord.pageLoaded else { return }
-            webView.evaluateJavaScript("exportHTMLContent()") { _, _ in }
+            let safeExportMode = exportHTMLMode.replacingOccurrences(of: "'", with: "")
+            webView.evaluateJavaScript("exportHTMLContent('\(safeExportMode)')") { _, _ in }
         }
 
         if scrollChanged {
@@ -110,9 +114,15 @@ struct MarkdownWebView: NSViewRepresentable {
 
         if coord.lastAppearanceMode != appearanceMode {
             coord.lastAppearanceMode = appearanceMode
+            coord.applyAppearance(appearanceMode, to: webView)
+            // Force full reload so mermaid re-renders with correct theme
             if coord.pageLoaded {
-                let escaped = appearanceMode.replacingOccurrences(of: "'", with: "\\'")
-                webView.evaluateJavaScript("setAppearance('\(escaped)')") { _, _ in }
+                coord.pageLoaded = false
+                let htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
+                webView.evaluateJavaScript("window.scrollY") { result, _ in
+                    coord.savedScrollY = result as? Double ?? 0
+                    webView.loadHTMLString(htmlToLoad, baseURL: nil)
+                }
             }
         }
 
@@ -253,6 +263,14 @@ struct MarkdownWebView: NSViewRepresentable {
             }
         }
 
+        func applyAppearance(_ mode: String, to webView: WKWebView) {
+            switch mode {
+            case "light": webView.appearance = NSAppearance(named: .aqua)
+            case "dark": webView.appearance = NSAppearance(named: .darkAqua)
+            default: webView.appearance = nil
+            }
+        }
+
         // MARK: - WKNavigationDelegate
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -266,10 +284,7 @@ struct MarkdownWebView: NSViewRepresentable {
                 pendingSearch = nil
                 performSearch(search, in: webView)
             }
-            if lastAppearanceMode != "auto" {
-                let escaped = lastAppearanceMode.replacingOccurrences(of: "'", with: "\\'")
-                webView.evaluateJavaScript("setAppearance('\(escaped)')") { _, _ in }
-            }
+            applyAppearance(lastAppearanceMode, to: webView)
         }
 
         func webView(

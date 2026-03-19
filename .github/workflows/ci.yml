@@ -31,8 +31,30 @@ jobs:
       - name: Build (release)
         run: swift build -c release
 
-      - name: Run tests
-        run: swift test
+      - name: Run tests with coverage
+        run: swift test --enable-code-coverage
+
+      - name: Generate coverage report
+        run: |
+          BIN_PATH=$(swift build --show-bin-path)
+          PROF_PATH=$(find .build -name "default.profdata" -type f | head -1)
+          xcrun llvm-cov export \
+            "$BIN_PATH/MarkdownViewerPackageTests.xctest/Contents/MacOS/MarkdownViewerPackageTests" \
+            -instr-profile="$PROF_PATH" \
+            -ignore-filename-regex='.build|Tests|ContentView|MarkdownWebView|FileWatcher' \
+            -format=lcov > coverage.lcov
+          xcrun llvm-cov report \
+            "$BIN_PATH/MarkdownViewerPackageTests.xctest/Contents/MacOS/MarkdownViewerPackageTests" \
+            -instr-profile="$PROF_PATH" \
+            -ignore-filename-regex='.build|Tests|ContentView|MarkdownWebView|FileWatcher'
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
+        with:
+          files: coverage.lcov
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Build app bundle
         run: make app
