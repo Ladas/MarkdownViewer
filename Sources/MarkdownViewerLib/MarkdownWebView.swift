@@ -93,14 +93,16 @@ struct MarkdownWebView: NSViewRepresentable {
         if copyChanged {
             coord.lastCopyRenderedTrigger = copyRenderedTrigger
             guard coord.pageLoaded else { return }
-            webView.evaluateJavaScript("copyRenderedContent('\(copyHTMLMode)')") { _, _ in }
+            let safeMode = copyHTMLMode.replacingOccurrences(of: "'", with: "")
+            webView.evaluateJavaScript("copyRenderedContent('\(safeMode)')") { _, _ in }
         }
 
         let exportChanged = coord.lastExportHTMLTrigger != exportHTMLTrigger
         if exportChanged {
             coord.lastExportHTMLTrigger = exportHTMLTrigger
             guard coord.pageLoaded else { return }
-            webView.evaluateJavaScript("exportHTMLContent('\(exportHTMLMode)')") { _, _ in }
+            let safeExportMode = exportHTMLMode.replacingOccurrences(of: "'", with: "")
+            webView.evaluateJavaScript("exportHTMLContent('\(safeExportMode)')") { _, _ in }
         }
 
         if scrollChanged {

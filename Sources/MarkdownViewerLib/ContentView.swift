@@ -102,6 +102,9 @@ struct ExportHTMLKey: FocusedValueKey {
 struct AddNoteKey: FocusedValueKey {
     typealias Value = () -> Void
 }
+struct ToggleChatKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
 struct SetAppearanceKey: FocusedValueKey {
     typealias Value = (String) -> Void
 }
@@ -154,6 +157,10 @@ public extension FocusedValues {
     var addNote: (() -> Void)? {
         get { self[AddNoteKey.self] }
         set { self[AddNoteKey.self] = newValue }
+    }
+    var toggleChat: (() -> Void)? {
+        get { self[ToggleChatKey.self] }
+        set { self[ToggleChatKey.self] = newValue }
     }
     var setAppearance: ((String) -> Void)? {
         get { self[SetAppearanceKey.self] }

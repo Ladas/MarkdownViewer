@@ -22,7 +22,10 @@
         if (typeof marked !== 'undefined') {
             var rawHTML = marked.parse(markdown);
             if (typeof DOMPurify !== 'undefined') {
-                rawHTML = DOMPurify.sanitize(rawHTML);
+                rawHTML = DOMPurify.sanitize(rawHTML, {
+                    FORBID_TAGS: ['foreignObject'],
+                    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'xlink:href']
+                });
                 document.getElementById('content').innerHTML = rawHTML;
             } else {
                 // Fail closed: refuse to render unsanitized HTML
@@ -42,8 +45,9 @@
             var pre = el.parentElement;
             var div = document.createElement('pre');
             div.className = 'mermaid';
-            div.textContent = el.textContent;
-            div.innerHTML = div.innerHTML.replace(/\\n/g, '<br/>');
+            // Replace literal \n with actual newlines for mermaid line breaks
+            // (safe: no innerHTML, mermaid in strict mode handles \n in labels)
+            div.textContent = el.textContent.replace(/\\n/g, '\n');
             pre.replaceWith(div);
         });
 
@@ -81,8 +85,8 @@
             mermaid.initialize({
                 startOnLoad: false,
                 theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
-                securityLevel: 'loose',
-                flowchart: { htmlLabels: true, useMaxWidth: true },
+                securityLevel: 'strict',
+                flowchart: { useMaxWidth: true },
                 sequence: { useMaxWidth: true },
                 gantt: { useMaxWidth: true }
             });
