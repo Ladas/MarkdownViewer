@@ -22,7 +22,9 @@ struct MarkdownViewerApp: App {
         DocumentGroup(viewing: MarkdownDocument.self) { config in
             ContentView(document: config.document, fileURL: config.fileURL)
                 .navigationSubtitle(config.fileURL?.path ?? "")
+                .frame(idealWidth: 1300, idealHeight: 900)
         }
+        .defaultSize(width: 1300, height: 900)
         .commands {
             CommandGroup(replacing: .textEditing) {
                 Button("Find...") {

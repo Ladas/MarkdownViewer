@@ -20,6 +20,7 @@ struct MarkdownWebView: NSViewRepresentable {
     var onExportHTML: ((String) -> Void)?
     var onEditNote: ((Int, String) -> Void)?
     var onAddNoteAtHeading: ((String) -> Void)?
+    var onCommentNote: ((String) -> Void)?
     var onExplainWithClaude: ((String) -> Void)?
     var onAskClaude: ((String) -> Void)?
 
@@ -49,6 +50,7 @@ struct MarkdownWebView: NSViewRepresentable {
         coord.onExportHTML = onExportHTML
         coord.onEditNote = onEditNote
         coord.onAddNoteAtHeading = onAddNoteAtHeading
+        coord.onCommentNote = onCommentNote
         coord.onExplainWithClaude = onExplainWithClaude
         coord.onAskClaude = onAskClaude
 
@@ -154,6 +156,7 @@ struct MarkdownWebView: NSViewRepresentable {
         var onExportHTML: ((String) -> Void)?
         var onEditNote: ((Int, String) -> Void)?
         var onAddNoteAtHeading: ((String) -> Void)?
+        var onCommentNote: ((String) -> Void)?
         var onExplainWithClaude: ((String) -> Void)?
         var onAskClaude: ((String) -> Void)?
 
@@ -296,6 +299,15 @@ class MarkdownWKWebView: WKWebView {
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         menu.addItem(NSMenuItem.separator())
 
+        let commentItem = NSMenuItem(
+            title: "Comment",
+            action: #selector(commentSelection(_:)),
+            keyEquivalent: ""
+        )
+        commentItem.target = self
+        commentItem.image = NSImage(systemSymbolName: "bubble.left", accessibilityDescription: "Comment")
+        menu.addItem(commentItem)
+
         let claudeMenu = NSMenu(title: "Claude")
 
         let explainItem = NSMenuItem(
@@ -320,6 +332,14 @@ class MarkdownWKWebView: WKWebView {
         menu.addItem(claudeItem)
 
         super.willOpenMenu(menu, with: event)
+    }
+
+    @objc private func commentSelection(_ sender: Any?) {
+        evaluateJavaScript("window.getSelection().toString()") { [weak self] result, _ in
+            guard let text = result as? String else { return }
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            self?.coordinator?.onCommentNote?(trimmed)
+        }
     }
 
     @objc private func explainWithClaude(_ sender: Any?) {

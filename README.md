@@ -24,6 +24,12 @@ As AI-assisted development tools like Claude Code become the primary way to writ
 - **Light/Dark/System appearance** toggle (View > Appearance)
 - **Search** (Cmd+F) with match highlighting and navigation
 - **Zoom** (Cmd+/-, trackpad pinch, click-drag pan when zoomed)
+- **Claude Chat panel** (Cmd+Shift+K) — integrated chat with Claude CLI, per-file sessions with `--resume`, streaming responses rendered as markdown
+- **Context menu: Claude > Explain** — select text, right-click, explain it with Claude
+- **Context menu: Claude > Ask...** — select text, right-click, paste into chat input with your question
+- **Context menu: Comment** — select text, right-click, add an inline comment anchored to that text
+- **Inline comments** — comments tied to specific text passages, stored in a sidecar JSON file, shown in the Comments panel with quoted reference text
+- **Address Feedback** button — sends all review notes and inline comments to Claude chat for resolution
 - **Review notes** — add inline review feedback that Claude Code can read and act on (see [Review Workflow](#review-workflow))
 - **Voice dictation** support — toggle Voice mode in the action bar, use native macOS dictation (Fn+Fn) to speak notes
 - **Copy Markdown Source** (Cmd+Shift+C) copies raw markdown
@@ -102,6 +108,7 @@ open -a "Markdown Viewer" README.md
 | Copy markdown source | Cmd+Shift+C |
 | Copy HTML | Cmd+Option+C |
 | Export HTML | Cmd+E |
+| Claude Chat | Cmd+Shift+K |
 | Add review note | Cmd+Shift+N |
 | Add note at section | Cmd+double-click |
 
@@ -141,8 +148,12 @@ Sources/
   MarkdownViewerLib/           # Library (testable)
     HTMLRenderer.swift          # Template composition, JS escaping, resource caching
     MarkdownDocument.swift      # Read-only FileDocument for .md files
-    MarkdownWebView.swift       # WKWebView wrapper with search, zoom, panning
+    MarkdownWebView.swift       # WKWebView wrapper with search, zoom, panning, context menu
     ContentView.swift           # SwiftUI view with action bar, TOC sidebar, diff view
+    ChatPanelView.swift         # Claude Chat panel with WKWebView message rendering
+    ChatMessage.swift           # Chat message model and per-file history manager
+    ClaudeCLIRunner.swift       # Claude CLI process wrapper with JSON output parsing
+    InlineComment.swift         # Inline comment model and sidecar JSON store
     FileWatcher.swift           # Polls file modification date for auto-reload
     GitHelper.swift             # Git diff operations and diff-to-HTML rendering
     Resources/

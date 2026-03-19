@@ -198,7 +198,7 @@ struct ChatPanelView: View {
                     TextField("Ask Claude...", text: $inputText, axis: .vertical)
                         .textFieldStyle(.plain)
                         .font(.system(size: 12))
-                        .lineLimit(1...5)
+                        .lineLimit(1...15)
                         .focused($isInputFocused)
                         .onSubmit {
                             if !NSEvent.modifierFlags.contains(.shift) {
