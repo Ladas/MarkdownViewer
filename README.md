@@ -3,6 +3,7 @@
 [![CI](https://github.com/Ladas/MarkdownViewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Ladas/MarkdownViewer/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Ladas/MarkdownViewer/actions/workflows/codeql.yml/badge.svg)](https://github.com/Ladas/MarkdownViewer/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Ladas/MarkdownViewer/badge)](https://scorecard.dev/viewer/?uri=github.com/Ladas/MarkdownViewer)
+[![Coverage](https://codecov.io/gh/Ladas/MarkdownViewer/graph/badge.svg)](https://codecov.io/gh/Ladas/MarkdownViewer)
 [![Release](https://img.shields.io/github/v/release/Ladas/MarkdownViewer)](https://github.com/Ladas/MarkdownViewer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue.svg)](https://www.apple.com/macos/)
