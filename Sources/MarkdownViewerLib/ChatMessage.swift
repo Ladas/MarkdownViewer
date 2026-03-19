@@ -71,6 +71,11 @@ public final class ChatHistoryManager {
         return hash.prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 
+    /// Reset session ID — used when working directory changes (CLI sessions are directory-bound)
+    public func resetSessionId() {
+        sessionId = nil
+    }
+
     /// Store the Claude CLI session UUID (called after first response)
     public func setSessionId(_ id: String) {
         sessionId = id

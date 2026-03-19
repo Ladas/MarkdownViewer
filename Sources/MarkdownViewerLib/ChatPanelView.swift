@@ -140,6 +140,7 @@ struct ChatPanelView: View {
     @State private var historyManager: ChatHistoryManager?
     @State private var cliRunner: ClaudeCLIRunner?
     @State private var gitRoot: URL?
+    @State private var sessionIdsByDir: [String: String] = [:]
     @State private var allowEditing = true
     @FocusState private var isInputFocused: Bool
 
@@ -187,6 +188,7 @@ struct ChatPanelView: View {
                 isStreaming: isLoading,
                 statusText: lastShownStderr
             )
+            .frame(maxHeight: .infinity)
 
             Divider()
 
@@ -230,6 +232,32 @@ struct ChatPanelView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(.bar)
+
+            // Status bar — working directory
+            Divider()
+            HStack(spacing: 4) {
+                Image(systemName: "folder")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                Text(displayPath)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                Spacer()
+                if let sid = historyManager?.sessionId {
+                    Text(String(sid.prefix(8)))
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundStyle(.quaternary)
+                        .help("Session: \(sid)")
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 3)
+            .background(.bar)
+            .contentShape(Rectangle())
+            .onTapGesture { changeWorkingDirectory() }
+            .help("Click to change Claude's working directory")
         }
         .onAppear {
             setupChat()
@@ -258,7 +286,48 @@ struct ChatPanelView: View {
         if let input = pendingInput, !input.isEmpty {
             pendingInput = nil
             inputText = input
-            isInputFocused = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                isInputFocused = true
+                // macOS selects all on focus — move cursor to end instead
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    if let window = NSApp.keyWindow,
+                       let textView = window.firstResponder as? NSTextView {
+                        let end = textView.string.count
+                        textView.setSelectedRange(NSRange(location: end, length: 0))
+                    }
+                }
+            }
+        }
+    }
+
+    private var displayPath: String {
+        if let root = gitRoot {
+            return root.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+        }
+        return fileURL?.deletingLastPathComponent().path.replacingOccurrences(of: NSHomeDirectory(), with: "~") ?? "—"
+    }
+
+    private func changeWorkingDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose working directory for Claude"
+        if let root = gitRoot {
+            panel.directoryURL = root
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        // Save current session ID for the old directory
+        if let oldRoot = gitRoot, let sid = historyManager?.sessionId {
+            sessionIdsByDir[oldRoot.path] = sid
+        }
+        gitRoot = url
+        cliRunner = ClaudeCLIRunner(workingDirectory: url)
+        // Restore session if we've used this directory before, otherwise start fresh
+        if let savedSid = sessionIdsByDir[url.path] {
+            historyManager?.setSessionId(savedSid)
+        } else {
+            historyManager?.resetSessionId()
         }
     }
 
@@ -334,9 +403,44 @@ struct ChatPanelView: View {
                             historyManager?.append(assistantMessage)
                         }
                     }
+                    // Expired session — retry without --resume
+                    if text.contains("No conversation found with session ID") {
+                        historyManager?.resetSessionId()
+                        if let root = gitRoot {
+                            sessionIdsByDir.removeValue(forKey: root.path)
+                        }
+                        streamingResponse = ""
+                        // Re-run without session ID
+                        cliRunner?.run(
+                            prompt: buildPrompt(prompt),
+                            allowEditing: allowEditing,
+                            sessionId: nil,
+                            onOutput: { [self] chunk in
+                                MainActor.assumeIsolated { streamingResponse += chunk }
+                            },
+                            onComplete: { [self] retryResponse, _ in
+                                MainActor.assumeIsolated {
+                                    let retryText = retryResponse.result.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    if !retryText.isEmpty {
+                                        let msg = ChatMessage(role: .assistant, content: retryText)
+                                        messages.append(msg)
+                                        historyManager?.append(msg)
+                                    }
+                                    if let sid = retryResponse.sessionId {
+                                        historyManager?.setSessionId(sid)
+                                        if let root = gitRoot { sessionIdsByDir[root.path] = sid }
+                                    }
+                                    streamingResponse = ""
+                                    isLoading = false
+                                }
+                            }
+                        )
+                        return
+                    }
                     // Store session ID from Claude CLI for --resume
                     if let sid = response.sessionId {
                         historyManager?.setSessionId(sid)
+                        if let root = gitRoot { sessionIdsByDir[root.path] = sid }
                     }
                     streamingResponse = ""
                     isLoading = false
