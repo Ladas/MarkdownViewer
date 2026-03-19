@@ -8,6 +8,7 @@ MARKED_VERSION = 15.0.8
 MERMAID_VERSION = 11.4.1
 DOMPURIFY_VERSION = 3.2.4
 GH_MARKDOWN_CSS_VERSION = 5.8.1
+FA_VERSION = 6.7.2
 
 deps:
 	@mkdir -p $(VENDOR_DIR)
@@ -19,6 +20,22 @@ deps:
 	@curl -sL "https://cdn.jsdelivr.net/npm/dompurify@$(DOMPURIFY_VERSION)/dist/purify.min.js" -o $(VENDOR_DIR)/purify.min.js
 	@echo "Downloading github-markdown-css@$(GH_MARKDOWN_CSS_VERSION)..."
 	@curl -sL "https://cdn.jsdelivr.net/npm/github-markdown-css@$(GH_MARKDOWN_CSS_VERSION)/github-markdown.css" -o $(VENDOR_DIR)/github-markdown.css
+	@echo "Downloading Font Awesome@$(FA_VERSION)..."
+	@curl -sL "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/$(FA_VERSION)/css/all.min.css" -o $(VENDOR_DIR)/fontawesome-raw.css
+	@curl -sL "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/$(FA_VERSION)/webfonts/fa-solid-900.woff2" -o $(VENDOR_DIR)/fa-solid-900.woff2
+	@curl -sL "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/$(FA_VERSION)/webfonts/fa-regular-400.woff2" -o $(VENDOR_DIR)/fa-regular-400.woff2
+	@curl -sL "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/$(FA_VERSION)/webfonts/fa-brands-400.woff2" -o $(VENDOR_DIR)/fa-brands-400.woff2
+	@echo "Inlining Font Awesome fonts..."
+	@cd $(VENDOR_DIR) && \
+		SOLID=$$(base64 -i fa-solid-900.woff2) && \
+		REGULAR=$$(base64 -i fa-regular-400.woff2) && \
+		BRANDS=$$(base64 -i fa-brands-400.woff2) && \
+		sed \
+			-e "s|../webfonts/fa-solid-900.woff2|data:font/woff2;base64,$$SOLID|g" \
+			-e "s|../webfonts/fa-regular-400.woff2|data:font/woff2;base64,$$REGULAR|g" \
+			-e "s|../webfonts/fa-brands-400.woff2|data:font/woff2;base64,$$BRANDS|g" \
+			fontawesome-raw.css > fontawesome.css && \
+		rm -f fontawesome-raw.css fa-solid-900.woff2 fa-regular-400.woff2 fa-brands-400.woff2
 	@echo "Done."
 
 verify-deps:
