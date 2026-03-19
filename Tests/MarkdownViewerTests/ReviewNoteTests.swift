@@ -112,6 +112,27 @@ struct ReplaceTests {
         #expect(result.contains("## Next"))
     }
 
+    @Test func deletePreservesBlankLineBetweenContent() {
+        let md = "---\n\n```review\nnote\n```\n\n## 1. Heading"
+        let result = ReviewNote.replace(at: 0, with: nil, in: md)
+        #expect(!result.contains("review"))
+        #expect(result.contains("---"))
+        #expect(result.contains("## 1. Heading"))
+        // Must NOT merge into "---## 1. Heading"
+        #expect(!result.contains("---##"))
+        #expect(!result.contains("---\n##"))
+    }
+
+    @Test func deleteBetweenHeadings() {
+        let md = "## Section A\n\nContent\n\n```review\nfeedback\n```\n\n## Section B"
+        let result = ReviewNote.replace(at: 0, with: nil, in: md)
+        #expect(result.contains("## Section A"))
+        #expect(result.contains("## Section B"))
+        #expect(!result.contains("feedback"))
+        // Headings must remain on their own lines
+        #expect(!result.contains("Content\n##"))
+    }
+
     @Test func replacePreservesMultiline() {
         let md = "```review\nOld\n```"
         let result = ReviewNote.replace(at: 0, with: "Line 1\nLine 2", in: md)

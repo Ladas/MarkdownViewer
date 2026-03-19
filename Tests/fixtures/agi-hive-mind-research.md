@@ -19,6 +19,12 @@ This observation motivates a fundamental question:
 
 Recent work suggests the answer is yes. Park et al. [2023] demonstrated that LLM-powered agents in a simulated town exhibit emergent social behaviors — planning, forming relationships, coordinating activities — that were never explicitly programmed. Wu et al. [2023] showed that multi-agent conversations between LLMs produce higher-quality outputs than single-agent prompting.
 
+
+
+```review
+dfdsf
+```
+
 ### 1.1 Contributions
 
 1. A **taxonomy of agent coordination patterns** grounded in biological swarm intelligence
@@ -27,6 +33,12 @@ Recent work suggests the answer is yes. Park et al. [2023] demonstrated that LLM
 4. **Scaling laws** for emergent intelligence in agent swarms
 
 ---
+
+
+
+```review
+test
+```
 
 ## 2. Related Work
 
@@ -62,6 +74,18 @@ Biological swarms exhibit five properties enabling collective intelligence [Bona
 5. **Redundancy** — individual failure does not collapse the system
 
 ---
+
+
+
+```review
+sdasd
+```
+
+
+
+```review
+asdasd
+```
 
 ## 3. Architecture
 
@@ -336,3 +360,8 @@ Also compare against OpenAI's Swarm framework and Langchain agents.
 ---
 
 *Tests: tables, mermaid (flowchart, sequence, state, mindmap, pie, xychart, gantt), inline SVG with theme support, code blocks, task lists, math, blockquotes, links, review notes.*
+
+
+```review
+sdsd
+```

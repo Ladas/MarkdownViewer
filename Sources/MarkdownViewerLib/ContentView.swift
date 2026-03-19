@@ -19,15 +19,6 @@ public struct ResolvedBatch: Identifiable {
     public let diff: String
 }
 
-// MARK: - Note Editor State
-
-public struct NoteEditor: Identifiable {
-    public let id = UUID()
-    public var content: String
-    public var editingIndex: Int?
-    public var afterHeading: String?
-}
-
 // MARK: - TOC Entry
 
 public struct TOCEntry: Identifiable {
@@ -96,13 +87,13 @@ struct ToggleTOCKey: FocusedValueKey {
 struct ToggleDiffKey: FocusedValueKey {
     typealias Value = () -> Void
 }
+struct ToggleChatKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
 struct ExportHTMLKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 struct AddNoteKey: FocusedValueKey {
-    typealias Value = () -> Void
-}
-struct ToggleChatKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 struct SetAppearanceKey: FocusedValueKey {
@@ -150,6 +141,10 @@ public extension FocusedValues {
         get { self[ToggleDiffKey.self] }
         set { self[ToggleDiffKey.self] = newValue }
     }
+    var toggleChat: (() -> Void)? {
+        get { self[ToggleChatKey.self] }
+        set { self[ToggleChatKey.self] = newValue }
+    }
     var exportHTML: (() -> Void)? {
         get { self[ExportHTMLKey.self] }
         set { self[ExportHTMLKey.self] = newValue }
@@ -157,10 +152,6 @@ public extension FocusedValues {
     var addNote: (() -> Void)? {
         get { self[AddNoteKey.self] }
         set { self[AddNoteKey.self] = newValue }
-    }
-    var toggleChat: (() -> Void)? {
-        get { self[ToggleChatKey.self] }
-        set { self[ToggleChatKey.self] = newValue }
     }
     var setAppearance: ((String) -> Void)? {
         get { self[SetAppearanceKey.self] }
@@ -200,8 +191,24 @@ public struct ContentView: View {
     @State private var showComments = false
     @State private var resolvedNotes: [ResolvedBatch] = []
     @State private var previousNotes: [String] = []
-    @State private var openEditors: [NoteEditor] = []
+    @State private var showNoteEditor = false
+    @State private var noteContent = ""
+    @State private var editingNoteIndex: Int?
+    @State private var insertAfterHeading: String?
+    @State private var voiceInputEnabled = false
+    @State private var showChat = false
+    @State private var chatPanelHeight: CGFloat = 400
+    @State private var chatDragStartHeight: CGFloat? = nil
+    @State private var pendingChatPrompt: String? = nil
+    @State private var pendingChatInput: String? = nil
+    @State private var inlineComments: [InlineComment] = []
+    @State private var inlineCommentStore: InlineCommentStore?
+    @State private var showInlineCommentEditor = false
+    @State private var inlineCommentText = ""
+    @State private var inlineCommentRef = ""
+    @State private var editingInlineCommentId: UUID? = nil
     @FocusState private var isSearchFocused: Bool
+    @FocusState private var isNoteFocused: Bool
 
     public init(document: MarkdownDocument, fileURL: URL? = nil) {
         self.document = document
@@ -211,14 +218,16 @@ public struct ContentView: View {
 
     @State private var tocEntries: [TOCEntry] = []
 
-    @State private var activeNotes: [String] = []
+    private var activeNotes: [String] {
+        ReviewNote.extract(from: currentText)
+    }
 
     private var commentsButtonLabel: String {
-        let active = activeNotes.count
+        let total = activeNotes.count + inlineComments.count
         let resolved = resolvedNotes.flatMap(\.notes).count
-        if active == 0 && resolved == 0 { return "Comments" }
-        if resolved == 0 { return "\(active)" }
-        return "\(active)/\(resolved)"
+        if total == 0 && resolved == 0 { return "Comments" }
+        if resolved == 0 { return "\(total)" }
+        return "\(total)/\(resolved)"
     }
 
     private var effectiveOverrideHTML: String? {
@@ -254,9 +263,7 @@ public struct ContentView: View {
                     navigationTrigger: navigationTrigger,
                     navigationForward: navigationForward,
                     copyRenderedTrigger: copyRenderedTrigger,
-                    copyHTMLMode: appearanceMode,
                     exportHTMLTrigger: exportHTMLTrigger,
-                    exportHTMLMode: appearanceMode,
                     zoomLevel: zoomLevel,
                     scrollToHeadingTrigger: scrollToHeadingTrigger,
                     scrollToHeadingIndex: scrollToHeadingIndex,
@@ -268,12 +275,17 @@ public struct ContentView: View {
                     },
                     onCopyDone: { showCopiedToast() },
                     onExportHTML: { html in saveHTMLFile(html) },
-                    onEditNote: { index, content in addEditor(index: index, content: content) },
-                    onAddNoteAtHeading: { heading in addEditor(afterHeading: heading) }
+                    onEditNote: { index, content in openNoteEditor(index: index, content: content) },
+                    onAddNoteAtHeading: { heading in openNoteEditor(afterHeading: heading) },
+                    onCommentNote: { text in commentOnSelection(text) },
+                    onExplainWithClaude: { text in explainWithClaude(text) },
+                    onAskClaude: { text in askClaude(text) }
                 )
-                ForEach($openEditors) { $editor in
-                    Divider()
-                    inlineNoteEditor(editor: $editor)
+
+                if showChat {
+                    chatDivider
+                    ChatPanelView(fileURL: fileURL, pendingPrompt: $pendingChatPrompt, pendingInput: $pendingChatInput)
+                        .frame(height: chatPanelHeight)
                 }
             }
             if showComments {
@@ -281,7 +293,7 @@ public struct ContentView: View {
                 commentsPanel
             }
         }
-        .frame(minWidth: 600, minHeight: 400)
+        .frame(minWidth: 1100, minHeight: 750)
         .overlay(alignment: .topTrailing) {
             if showCopied {
                 Text("Copied!")
@@ -299,22 +311,26 @@ public struct ContentView: View {
         .focusedValue(\.copySource, copySource)
         .focusedValue(\.copyRendered, copyRendered)
         .focusedValue(\.exportHTML, exportHTML)
-        .focusedValue(\.addNote, { addEditor() })
+        .focusedValue(\.addNote, { openNoteEditor() })
         .focusedValue(\.zoomIn, { zoomLevel = min(zoomLevel + 0.1, 3.0) })
         .focusedValue(\.zoomOut, { zoomLevel = max(zoomLevel - 0.1, 0.5) })
         .focusedValue(\.zoomReset, { zoomLevel = 1.0 })
         .focusedValue(\.toggleTOC, { showTOC.toggle() })
         .focusedValue(\.toggleDiff, toggleDiff)
+        .focusedValue(\.toggleChat, { showChat.toggle() })
         .focusedValue(\.setAppearance, { mode in appearanceMode = mode })
         .onExitCommand {
             if showSearch { dismissSearch() }
         }
         .onAppear {
             tocEntries = TOCEntry.parse(from: currentText)
-            activeNotes = ReviewNote.extract(from: currentText)
-            previousNotes = activeNotes
+            previousNotes = ReviewNote.extract(from: currentText)
             startFileWatcher()
             checkGitRepo()
+            if let url = fileURL {
+                inlineCommentStore = InlineCommentStore(fileURL: url)
+                inlineComments = inlineCommentStore?.load() ?? []
+            }
         }
         .onDisappear {
             fileWatcher?.stop()
@@ -322,56 +338,138 @@ public struct ContentView: View {
         }
         .onChange(of: currentText) { _ in
             tocEntries = TOCEntry.parse(from: currentText)
-            activeNotes = ReviewNote.extract(from: currentText)
             if showDiff { updateDiff() }
             detectResolvedNotes()
         }
+        .sheet(isPresented: $showNoteEditor) {
+            noteEditorSheet
+        }
+        .sheet(isPresented: $showInlineCommentEditor) {
+            inlineCommentEditorSheet
+        }
     }
 
-    // MARK: - Inline Note Editor
+    // MARK: - Note Editor Sheet
 
-    private func inlineNoteEditor(editor: Binding<NoteEditor>) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "bubble.left.fill")
-                    .foregroundColor(.accentColor)
-                    .font(.caption)
-                Text(editor.wrappedValue.editingIndex != nil ? "Edit Note" : "New Note")
-                    .font(.system(size: 11, weight: .semibold))
-                if let heading = editor.wrappedValue.afterHeading, !heading.isEmpty {
-                    Text("after \"\(heading)\"")
-                        .font(.system(size: 10))
+    private var noteEditorSheet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(editingNoteIndex != nil ? "Edit Review Note" : "New Review Note")
+                    .font(.headline)
+                Spacer()
+                if voiceInputEnabled {
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                    Text("Voice input enabled")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Spacer()
-                Text("Cmd+dblclick to add at section")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
             }
-            TextEditor(text: editor.content)
-                .font(.system(size: 12))
-                .frame(height: 60)
-                .border(Color.secondary.opacity(0.2))
-            HStack(spacing: 8) {
-                Button("Save") { saveEditor(editor.wrappedValue) }
+
+            if let heading = insertAfterHeading, !heading.isEmpty {
+                Text("After: \(heading)")
                     .font(.caption)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(editor.wrappedValue.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                if editor.wrappedValue.editingIndex != nil {
-                    Button("Delete") { deleteFromEditor(editor.wrappedValue) }
-                        .font(.caption)
-                        .controlSize(.small)
-                        .foregroundStyle(.red)
+                    .foregroundStyle(.secondary)
+            }
+
+            TextEditor(text: $noteContent)
+                .font(.body)
+                .frame(minHeight: 120)
+                .focused($isNoteFocused)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Cmd+double-click in the document to add a note at a section")
+                Text("Cmd+Shift+M to toggle voice input")
+                Text("Notes are saved as ```review blocks — Claude Code can read them")
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+
+            HStack {
+                Button("Cancel") {
+                    dismissNoteEditor()
                 }
-                Button("Close") { closeEditor(editor.wrappedValue.id) }
-                    .font(.caption)
-                    .controlSize(.small)
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Delete Note") {
+                    deleteNote()
+                }
+                .foregroundStyle(.red)
+                .opacity(editingNoteIndex != nil ? 1 : 0)
+                .disabled(editingNoteIndex == nil)
+
+                Button("Save") {
+                    saveNote()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(noteContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.bar)
+        .padding(20)
+        .frame(minWidth: 500, minHeight: 250)
+        .onAppear {
+            isNoteFocused = true
+        }
+    }
+
+    // MARK: - Inline Comment Editor Sheet
+
+    private var inlineCommentEditorSheet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(editingInlineCommentId != nil ? "Edit Comment" : "New Comment")
+                .font(.headline)
+
+            if !inlineCommentRef.isEmpty {
+                HStack(alignment: .top, spacing: 4) {
+                    Image(systemName: "text.quote")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                    Text(inlineCommentRef.prefix(200))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.secondary.opacity(0.08))
+                .cornerRadius(6)
+            }
+
+            TextEditor(text: $inlineCommentText)
+                .font(.body)
+                .frame(minHeight: 100)
+
+            Text("Comments are stored in a sidecar file and shown in the Comments panel")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+            HStack {
+                Button("Cancel") {
+                    showInlineCommentEditor = false
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                if editingInlineCommentId != nil {
+                    Button("Delete") {
+                        deleteInlineComment()
+                    }
+                    .foregroundStyle(.red)
+                }
+
+                Button("Save") {
+                    saveInlineComment()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(inlineCommentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 500, minHeight: 220)
     }
 
     // MARK: - TOC Sidebar
@@ -426,9 +524,17 @@ public struct ContentView: View {
                 .help("Compare file against last commit or remote (Cmd+D)")
             }
             actionButton("Note", icon: "plus.bubble") {
-                addEditor()
+                openNoteEditor()
             }
             .help("Add a review note — saved as ```review block in the file (Cmd+Shift+N)")
+            actionButton("Chat", icon: "ellipsis.message", active: showChat) {
+                showChat.toggle()
+            }
+            .help("Claude Chat (Cmd+Shift+K)")
+            actionButton(commentsButtonLabel, icon: "list.bullet.clipboard", active: showComments) {
+                showComments.toggle()
+            }
+            .help("Show/hide review comments panel with active and resolved notes")
 
             Spacer()
 
@@ -450,35 +556,28 @@ public struct ContentView: View {
                 .help("Content width: \(Int(contentWidth))px")
             if let url = fileURL {
                 actionButton("Path", icon: "doc.on.clipboard") {
-                    copyToClipboard(url.path)
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url.path, forType: .string)
+                    showCopiedToast()
                 }
                 .help(url.path)
             }
-            actionButton(commentsButtonLabel, icon: "bubble.left.and.bubble.right", active: showComments) {
-                showComments.toggle()
-            }
-            .help("Show/hide review comments panel with active and resolved notes")
             if let url = fileURL {
                 actionButton("Agent", icon: "arrow.up.doc.on.clipboard") {
                     copyAgentPrompt(url: url)
                 }
                 .help("Copy file path and review note instructions for your AI agent")
+                actionButton("Address", icon: "checkmark.bubble") {
+                    addressFeedback(url: url)
+                }
+                .help("Open chat with review note instructions — edit before sending")
             }
-            // Appearance: cycle auto → light → dark
-            Button(action: cycleAppearance) {
-                Image(systemName: appearanceIcon)
-                    .font(.system(size: 11))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .help("Appearance: \(appearanceMode) (affects preview and copy)")
-
             actionButton("MD", icon: "doc.on.doc") { copySource() }
                 .help("Copy raw markdown source to clipboard (Cmd+Shift+C)")
             actionButton("HTML", icon: "doc.richtext") { copyRendered() }
-                .help("Copy as standalone HTML in \(appearanceMode) mode (Cmd+Option+C)")
+                .help("Copy as standalone HTML with CSS and diagrams as PNG (Cmd+Option+C)")
             actionButton("Export", icon: "square.and.arrow.up") { exportHTML() }
-                .help("Export HTML file in \(appearanceMode) mode (Cmd+E)")
+                .help("Save as standalone HTML file (Cmd+E)")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -504,10 +603,11 @@ public struct ContentView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
+                    inlineCommentsSection
                     activeNotesSection
                     resolvedNotesSection
-                    if activeNotes.isEmpty && resolvedNotes.isEmpty {
-                        Text("No review notes yet.\nCmd+double-click to add one.")
+                    if activeNotes.isEmpty && resolvedNotes.isEmpty && inlineComments.isEmpty {
+                        Text("No comments yet.\nRight-click selected text to add one.")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                             .padding(12)
@@ -539,6 +639,58 @@ public struct ContentView: View {
     }
 
     @ViewBuilder
+    private var inlineCommentsSection: some View {
+        if !inlineComments.isEmpty {
+            Text("Inline Comments (\(inlineComments.count))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+
+            ForEach(inlineComments) { comment in
+                inlineCommentCard(comment)
+            }
+        }
+    }
+
+    private func inlineCommentCard(_ comment: InlineComment) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !comment.referenceText.isEmpty {
+                HStack(alignment: .top, spacing: 4) {
+                    Image(systemName: "text.quote")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.tertiary)
+                    Text(comment.referenceText.prefix(80))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .italic()
+                }
+            }
+            Text(comment.comment)
+                .font(.system(size: 11))
+                .lineLimit(3)
+            HStack(spacing: 4) {
+                Button("Edit") { editInlineComment(comment) }
+                    .font(.caption2)
+                Button("Address") { addressInlineComment(comment) }
+                    .font(.caption2)
+                    .foregroundStyle(.blue)
+                Button("Delete") {
+                    inlineCommentStore?.delete(id: comment.id)
+                    inlineComments = inlineCommentStore?.load() ?? []
+                }
+                .font(.caption2)
+                .foregroundStyle(.red)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.08))
+        .cornerRadius(6)
+        .padding(.horizontal, 8)
+    }
+
+    @ViewBuilder
     private var activeNotesSection: some View {
         if !activeNotes.isEmpty {
             Text("Active (\(activeNotes.count))")
@@ -558,7 +710,7 @@ public struct ContentView: View {
                 .font(.system(size: 11))
                 .lineLimit(3)
             HStack(spacing: 4) {
-                Button("Edit") { addEditor(index: index, content: note) }
+                Button("Edit") { openNoteEditor(index: index, content: note) }
                     .font(.caption2)
                 Button("Delete") { deleteNoteAt(index) }
                     .font(.caption2)
@@ -633,9 +785,8 @@ public struct ContentView: View {
     }
 
     private func detectResolvedNotes() {
-        let newNotes = activeNotes
-        let newSet = Set(newNotes)
-        let disappeared = previousNotes.filter { !newSet.contains($0) }
+        let newNotes = ReviewNote.extract(from: currentText)
+        let disappeared = previousNotes.filter { !newNotes.contains($0) }
 
         if !disappeared.isEmpty {
             let diff = computeSimpleDiff(old: previousNotes, new: newNotes)
@@ -651,13 +802,11 @@ public struct ContentView: View {
     }
 
     private func computeSimpleDiff(old: [String], new: [String]) -> String {
-        let oldSet = Set(old)
-        let newSet = Set(new)
         var lines = [String]()
-        for note in old where !newSet.contains(note) {
+        for note in old where !new.contains(note) {
             lines.append("- \(note.prefix(60))...")
         }
-        for note in new where !oldSet.contains(note) {
+        for note in new where !old.contains(note) {
             lines.append("+ \(note.prefix(60))...")
         }
         return lines.joined(separator: "\n")
@@ -745,6 +894,39 @@ public struct ContentView: View {
         .background(.bar)
     }
 
+    // MARK: - Chat Divider
+
+    private var chatDivider: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(height: 6)
+            .overlay(
+                Rectangle()
+                    .fill(Color(nsColor: .separatorColor))
+                    .frame(height: 1)
+            )
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.resizeUpDown.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        if chatDragStartHeight == nil {
+                            chatDragStartHeight = chatPanelHeight
+                        }
+                        chatPanelHeight = max(150, min(1200, (chatDragStartHeight ?? 400) - value.translation.height))
+                    }
+                    .onEnded { _ in
+                        chatDragStartHeight = nil
+                    }
+            )
+    }
+
     // MARK: - Actions
 
     private func toggleSearch() {
@@ -775,30 +957,10 @@ public struct ContentView: View {
         navigationTrigger += 1
     }
 
-    private var appearanceIcon: String {
-        switch appearanceMode {
-        case "light": return "sun.max.fill"
-        case "dark": return "moon.fill"
-        default: return "circle.lefthalf.filled"
-        }
-    }
-
-    private func cycleAppearance() {
-        switch appearanceMode {
-        case "auto": appearanceMode = "light"
-        case "light": appearanceMode = "dark"
-        default: appearanceMode = "auto"
-        }
-    }
-
-    private func copyToClipboard(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        showCopiedToast()
-    }
-
     private func copySource() {
-        copyToClipboard(currentText)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(currentText, forType: .string)
+        showCopiedToast()
     }
 
     private func copyRendered() {
@@ -822,7 +984,76 @@ public struct ContentView: View {
 
         Find all ```review blocks in the file, address each one, then remove the block once resolved. Keep the rest of the document intact.
         """
-        copyToClipboard(prompt)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(prompt, forType: .string)
+        showCopiedToast()
+    }
+
+    private func commentOnSelection(_ selectedText: String) {
+        inlineCommentRef = selectedText
+        inlineCommentText = ""
+        editingInlineCommentId = nil
+        showInlineCommentEditor = true
+    }
+
+    private func explainWithClaude(_ selectedText: String) {
+        let prompt = "Explain the following:\n\n```\n\(selectedText)\n```"
+        pendingChatPrompt = prompt
+        if !showChat {
+            showChat = true
+        }
+    }
+
+    private func askClaude(_ selectedText: String) {
+        let input = "Regarding:\n```\n\(selectedText)\n```\n\n"
+        pendingChatInput = input
+        if !showChat {
+            showChat = true
+        }
+    }
+
+    private func addressFeedback(url: URL) {
+        var parts = [String]()
+        parts.append("Read the file at: \(url.path)")
+
+        let noteCount = activeNotes.count
+        if noteCount > 0 {
+            parts.append("""
+            This file contains \(noteCount) review note\(noteCount == 1 ? "" : "s") marked as ```review blocks. \
+            Find each one, address the feedback, then remove the block once resolved.
+            """)
+        }
+
+        if !inlineComments.isEmpty {
+            parts.append("Additionally, address these inline comments:")
+            for comment in inlineComments {
+                if comment.referenceText.isEmpty {
+                    parts.append("- \(comment.comment)")
+                } else {
+                    parts.append("- Re \"\(comment.referenceText.prefix(100))\": \(comment.comment)")
+                }
+            }
+        }
+
+        parts.append("Keep the rest of the document intact.")
+
+        pendingChatInput = parts.joined(separator: "\n\n")
+        if !showChat {
+            showChat = true
+        }
+    }
+
+    private func addressInlineComment(_ comment: InlineComment) {
+        guard let url = fileURL else { return }
+        var prompt = "Read the file at: \(url.path)\n\nAddress this comment"
+        if !comment.referenceText.isEmpty {
+            prompt += " about \"\(comment.referenceText.prefix(100))\""
+        }
+        prompt += ":\n\n\(comment.comment)\n\nKeep the rest of the document intact."
+        pendingChatInput = prompt
+        if !showChat {
+            showChat = true
+        }
     }
 
     private func saveHTMLFile(_ html: String) {
@@ -877,43 +1108,98 @@ public struct ContentView: View {
         }
     }
 
+    // MARK: - Inline Comments
+
+    private func saveInlineComment() {
+        let trimmed = inlineCommentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if let id = editingInlineCommentId {
+            inlineCommentStore?.update(id: id, newComment: trimmed)
+        } else {
+            let comment = InlineComment(referenceText: inlineCommentRef, comment: trimmed)
+            inlineCommentStore?.append(comment)
+            // Also insert as review block near the referenced text in the markdown
+            insertReviewBlockNearReference(referenceText: inlineCommentRef, note: trimmed)
+        }
+        inlineComments = inlineCommentStore?.load() ?? []
+        showInlineCommentEditor = false
+    }
+
+    private func insertReviewBlockNearReference(referenceText: String, note: String) {
+        guard let url = fileURL, !referenceText.isEmpty else { return }
+        var content = currentText
+        let sanitized = ReviewNote.sanitizeContent(note)
+        let block = "\n\n```review\n\(sanitized)\n```\n"
+
+        // Find the referenced text and insert the review block after the line containing it
+        if let range = content.range(of: referenceText) {
+            // Find the end of the line containing the reference
+            let lineEnd = content[range.upperBound...].firstIndex(of: "\n") ?? content.endIndex
+            content.insert(contentsOf: block, at: lineEnd)
+        } else {
+            // Fallback: append at end
+            content += block
+        }
+        try? content.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func deleteInlineComment() {
+        if let id = editingInlineCommentId {
+            inlineCommentStore?.delete(id: id)
+            inlineComments = inlineCommentStore?.load() ?? []
+        }
+        showInlineCommentEditor = false
+    }
+
+    private func editInlineComment(_ comment: InlineComment) {
+        editingInlineCommentId = comment.id
+        inlineCommentRef = comment.referenceText
+        inlineCommentText = comment.comment
+        showInlineCommentEditor = true
+    }
+
     // MARK: - Review Notes
 
-    private func addEditor(index: Int? = nil, content: String = "", afterHeading: String? = nil) {
-        let editor = NoteEditor(content: content, editingIndex: index, afterHeading: afterHeading)
-        openEditors.append(editor)
+    private func dismissNoteEditor() {
+        showNoteEditor = false
+        noteContent = ""
+        editingNoteIndex = nil
+        insertAfterHeading = nil
     }
 
-    private func closeEditor(_ id: UUID) {
-        openEditors.removeAll { $0.id == id }
+    private func openNoteEditor(index: Int? = nil, content: String = "", afterHeading: String? = nil) {
+        editingNoteIndex = index
+        noteContent = content
+        insertAfterHeading = afterHeading
+        showNoteEditor = true
     }
 
-    private func saveEditor(_ editor: NoteEditor) {
+    private func saveNote() {
         guard let url = fileURL else { return }
-        let trimmed = editor.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = noteContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
         let sanitized = ReviewNote.sanitizeContent(trimmed)
         var content = currentText
         let noteBlock = "\n\n```review\n\(sanitized)\n```\n"
 
-        if let index = editor.editingIndex {
+        if let index = editingNoteIndex {
             content = ReviewNote.replace(at: index, with: sanitized, in: content)
-        } else if let heading = editor.afterHeading, !heading.isEmpty {
+        } else if let heading = insertAfterHeading, !heading.isEmpty {
             content = ReviewNote.insertAfterHeading(heading, note: noteBlock, in: content)
         } else {
             content += noteBlock
         }
 
         try? content.write(to: url, atomically: true, encoding: .utf8)
-        closeEditor(editor.id)
+        dismissNoteEditor()
     }
 
-    private func deleteFromEditor(_ editor: NoteEditor) {
-        guard let url = fileURL, let index = editor.editingIndex else { return }
+    private func deleteNote() {
+        guard let url = fileURL, let index = editingNoteIndex else { return }
         let content = ReviewNote.replace(at: index, with: nil, in: currentText)
         try? content.write(to: url, atomically: true, encoding: .utf8)
-        closeEditor(editor.id)
+        dismissNoteEditor()
     }
 
     // MARK: - File Watcher
