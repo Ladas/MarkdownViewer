@@ -6,17 +6,36 @@ public enum HTMLRenderer {
     private static let preparedTemplate: String = {
         let css = loadResource("style", withExtension: "css") ?? ""
         let vendorCSS = loadResource("github-markdown", withExtension: "css", subdirectory: "Resources/vendor") ?? ""
+        let faCSS = loadResource("fontawesome", withExtension: "css", subdirectory: "Resources/vendor") ?? ""
         let markedJS = loadResource("marked.min", withExtension: "js", subdirectory: "Resources/vendor") ?? ""
         let mermaidJS = loadResource("mermaid.min", withExtension: "js", subdirectory: "Resources/vendor") ?? ""
         let purifyJS = loadResource("purify.min", withExtension: "js", subdirectory: "Resources/vendor") ?? ""
         let template = loadResource("template", withExtension: "html") ?? fallbackTemplate()
         return template
             .replacingOccurrences(of: "/* {{VENDOR_CSS}} */", with: vendorCSS)
+            .replacingOccurrences(of: "/* {{FA_CSS}} */", with: faCSS)
             .replacingOccurrences(of: "/* {{CSS}} */", with: css)
             .replacingOccurrences(of: "/* {{MARKED_JS}} */", with: markedJS)
             .replacingOccurrences(of: "/* {{MERMAID_JS}} */", with: mermaidJS)
             .replacingOccurrences(of: "/* {{PURIFY_JS}} */", with: purifyJS)
     }()
+
+    private static let preparedChatTemplate: String = {
+        let vendorCSS = loadResource("github-markdown", withExtension: "css", subdirectory: "Resources/vendor") ?? ""
+        let faCSS = loadResource("fontawesome", withExtension: "css", subdirectory: "Resources/vendor") ?? ""
+        let markedJS = loadResource("marked.min", withExtension: "js", subdirectory: "Resources/vendor") ?? ""
+        let purifyJS = loadResource("purify.min", withExtension: "js", subdirectory: "Resources/vendor") ?? ""
+        let template = loadResource("chat-template", withExtension: "html") ?? fallbackTemplate()
+        return template
+            .replacingOccurrences(of: "/* {{VENDOR_CSS}} */", with: vendorCSS)
+            .replacingOccurrences(of: "/* {{FA_CSS}} */", with: faCSS)
+            .replacingOccurrences(of: "/* {{MARKED_JS}} */", with: markedJS)
+            .replacingOccurrences(of: "/* {{PURIFY_JS}} */", with: purifyJS)
+    }()
+
+    public static func renderChatTemplate() -> String {
+        preparedChatTemplate
+    }
 
     public static func render(markdown: String) -> String {
         let escaped = escapeForJSTemplateLiteral(markdown)
@@ -30,11 +49,13 @@ public enum HTMLRenderer {
         vendorCSS: String,
         markedJS: String,
         mermaidJS: String,
-        purifyJS: String = ""
+        purifyJS: String = "",
+        faCSS: String = ""
     ) -> String {
         let escaped = escapeForJSTemplateLiteral(markdown)
         return template
             .replacingOccurrences(of: "/* {{VENDOR_CSS}} */", with: vendorCSS)
+            .replacingOccurrences(of: "/* {{FA_CSS}} */", with: faCSS)
             .replacingOccurrences(of: "/* {{CSS}} */", with: css)
             .replacingOccurrences(of: "/* {{MARKED_JS}} */", with: markedJS)
             .replacingOccurrences(of: "/* {{MERMAID_JS}} */", with: mermaidJS)

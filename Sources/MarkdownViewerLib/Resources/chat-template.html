@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https:; font-src data:;">
+    <style>/* {{VENDOR_CSS}} */</style>
+    <style>/* {{FA_CSS}} */</style>
+    <script>/* {{PURIFY_JS}} */</script>
+    <script>/* {{MARKED_JS}} */</script>
+    <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        font-size: 13px;
+        padding: 8px;
+        background: #ffffff;
+        color: #1f2328;
+        overflow-y: auto;
+    }
+    @media (prefers-color-scheme: dark) {
+        body { background: #1e1e1e; color: #e6edf3; }
+    }
+    .message {
+        margin-bottom: 8px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        overflow-wrap: break-word;
+    }
+    .message-user {
+        background: rgba(0, 122, 255, 0.05);
+        border-left: 3px solid rgba(0, 122, 255, 0.3);
+    }
+    .message-assistant {
+        background: rgba(175, 82, 222, 0.05);
+        border-left: 3px solid rgba(175, 82, 222, 0.3);
+    }
+    @media (prefers-color-scheme: dark) {
+        .message-user {
+            background: rgba(0, 122, 255, 0.1);
+            border-left-color: rgba(0, 122, 255, 0.4);
+        }
+        .message-assistant {
+            background: rgba(175, 82, 222, 0.1);
+            border-left-color: rgba(175, 82, 222, 0.4);
+        }
+    }
+    .message-label {
+        font-size: 10px;
+        font-weight: 600;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .message-user .message-label { color: rgba(0, 122, 255, 0.7); }
+    .message-assistant .message-label { color: rgba(175, 82, 222, 0.7); }
+    .message-timestamp {
+        font-size: 9px;
+        color: #8b949e;
+        margin-top: 4px;
+    }
+    .message .markdown-body {
+        font-size: 12px;
+        background: transparent !important;
+        padding: 0 !important;
+    }
+    .message .markdown-body pre {
+        font-size: 11px;
+    }
+    .streaming-cursor::after {
+        content: '▌';
+        animation: blink 1s step-end infinite;
+        color: rgba(175, 82, 222, 0.5);
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    .message-status {
+        background: rgba(142, 142, 147, 0.08);
+        border-left: 3px solid rgba(142, 142, 147, 0.3);
+        font-size: 11px;
+        color: #8b949e;
+    }
+    @media (prefers-color-scheme: dark) {
+        .message-status {
+            background: rgba(142, 142, 147, 0.12);
+            border-left-color: rgba(142, 142, 147, 0.4);
+        }
+    }
+    .message-status .message-label { color: rgba(142, 142, 147, 0.7); }
+    .message-status pre {
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-size: 10px;
+        margin: 0;
+        padding: 4px 6px;
+        background: rgba(0,0,0,0.04);
+        border-radius: 4px;
+    }
+    @media (prefers-color-scheme: dark) {
+        .message-status pre {
+            background: rgba(255,255,255,0.06);
+        }
+    }
+    #empty-state {
+        text-align: center;
+        padding: 32px 16px;
+        color: #8b949e;
+    }
+    #empty-state .icon { font-size: 24px; margin-bottom: 8px; opacity: 0.3; }
+    #empty-state .title { font-size: 12px; margin-bottom: 4px; }
+    #empty-state .subtitle { font-size: 10px; opacity: 0.7; }
+    </style>
+</head>
+<body>
+    <div id="messages"></div>
+    <div id="empty-state">
+        <div class="icon">💬</div>
+        <div class="title">Ask Claude about this project</div>
+        <div class="subtitle">Toggle "Allow editing" to let Claude modify files</div>
+    </div>
+
+    <script>
+    var messagesEl = document.getElementById('messages');
+    var emptyState = document.getElementById('empty-state');
+    var streamingEl = null;
+
+    function renderMarkdown(text) {
+        if (typeof marked !== 'undefined') {
+            var html = marked.parse(text);
+            if (typeof DOMPurify !== 'undefined') {
+                return DOMPurify.sanitize(html);
+            }
+        }
+        // Fallback: escape and wrap in pre
+        var div = document.createElement('div');
+        div.textContent = text;
+        return '<pre>' + div.innerHTML + '</pre>';
+    }
+
+    function formatTimestamp(ts) {
+        try {
+            var d = new Date(ts);
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } catch(e) { return ''; }
+    }
+
+    function createMessageEl(role, htmlContent, timestamp) {
+        var div = document.createElement('div');
+        div.className = 'message message-' + role;
+
+        var label = document.createElement('div');
+        label.className = 'message-label';
+        label.textContent = role === 'user' ? 'You' : 'Claude';
+        div.appendChild(label);
+
+        var body = document.createElement('div');
+        body.className = 'markdown-body';
+        body.innerHTML = htmlContent;
+        div.appendChild(body);
+
+        if (timestamp) {
+            var ts = document.createElement('div');
+            ts.className = 'message-timestamp';
+            ts.textContent = formatTimestamp(timestamp);
+            div.appendChild(ts);
+        }
+
+        return div;
+    }
+
+    function scrollToBottom() {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+    function addMessage(role, markdownContent, timestamp) {
+        emptyState.style.display = 'none';
+        var html = renderMarkdown(markdownContent);
+        var el = createMessageEl(role, html, timestamp);
+        messagesEl.appendChild(el);
+        scrollToBottom();
+    }
+
+    function updateStreaming(markdownContent) {
+        if (!streamingEl) {
+            emptyState.style.display = 'none';
+            streamingEl = document.createElement('div');
+            streamingEl.className = 'message message-assistant';
+
+            var label = document.createElement('div');
+            label.className = 'message-label';
+            label.textContent = 'Claude';
+            streamingEl.appendChild(label);
+
+            var body = document.createElement('div');
+            body.className = 'markdown-body streaming-cursor';
+            streamingEl.appendChild(body);
+
+            messagesEl.appendChild(streamingEl);
+        }
+        var body = streamingEl.querySelector('.markdown-body');
+        body.innerHTML = renderMarkdown(markdownContent);
+        scrollToBottom();
+    }
+
+    function finalizeStreaming(timestamp) {
+        if (streamingEl) {
+            var body = streamingEl.querySelector('.markdown-body');
+            body.classList.remove('streaming-cursor');
+            if (timestamp) {
+                var ts = document.createElement('div');
+                ts.className = 'message-timestamp';
+                ts.textContent = formatTimestamp(timestamp);
+                streamingEl.appendChild(ts);
+            }
+            streamingEl = null;
+        }
+    }
+
+    function clearMessages() {
+        messagesEl.innerHTML = '';
+        streamingEl = null;
+        emptyState.style.display = 'block';
+    }
+
+    function showThinking() {
+        emptyState.style.display = 'none';
+        if (!streamingEl) {
+            streamingEl = document.createElement('div');
+            streamingEl.className = 'message message-assistant';
+
+            var label = document.createElement('div');
+            label.className = 'message-label';
+            label.textContent = 'Claude';
+            streamingEl.appendChild(label);
+
+            var body = document.createElement('div');
+            body.className = 'markdown-body streaming-cursor';
+            body.innerHTML = '<em style="color:#8b949e">Thinking...</em>';
+            streamingEl.appendChild(body);
+
+            messagesEl.appendChild(streamingEl);
+            scrollToBottom();
+        }
+    }
+
+    function showStatus(text) {
+        emptyState.style.display = 'none';
+        var div = document.createElement('div');
+        div.className = 'message message-status';
+
+        var label = document.createElement('div');
+        label.className = 'message-label';
+        label.textContent = 'System';
+        div.appendChild(label);
+
+        var body = document.createElement('div');
+        body.className = 'markdown-body';
+        // Show as preformatted text to preserve CLI formatting
+        var pre = document.createElement('pre');
+        pre.textContent = text;
+        body.appendChild(pre);
+        div.appendChild(body);
+
+        messagesEl.appendChild(div);
+        scrollToBottom();
+    }
+
+    function loadHistory(messages) {
+        clearMessages();
+        if (!messages || messages.length === 0) {
+            emptyState.style.display = 'block';
+            return;
+        }
+        emptyState.style.display = 'none';
+        messages.forEach(function(msg) {
+            var html = renderMarkdown(msg.content);
+            var el = createMessageEl(msg.role, html, msg.timestamp);
+            messagesEl.appendChild(el);
+        });
+        scrollToBottom();
+    }
+    </script>
+</body>
+</html>
