@@ -195,6 +195,20 @@
             (container || pre).replaceWith(img);
         });
 
+        // Convert standalone SVGs to PNG for copy/export
+        var standaloneSvgs = clone.querySelectorAll('svg:not(.mermaid svg)');
+        for (var si = 0; si < standaloneSvgs.length; si++) {
+            var svg = standaloneSvgs[si];
+            if (svg.closest('.mermaid-container') || svg.closest('pre.mermaid')) continue;
+            try {
+                var pngUrl = await svgToPngDataUrl(svg);
+                var img = document.createElement('img');
+                img.src = pngUrl;
+                img.style.maxWidth = '100%';
+                svg.replaceWith(img);
+            } catch(e) {}
+        }
+
         // Inline table styles for Google Docs compatibility
         clone.querySelectorAll('table').forEach(function(table) {
             table.style.borderCollapse = 'collapse';
