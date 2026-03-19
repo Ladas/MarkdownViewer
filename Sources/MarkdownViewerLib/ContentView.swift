@@ -527,9 +527,14 @@ public struct ContentView: View {
                 openNoteEditor()
             }
             .help("Add a review note — saved as ```review block in the file (Cmd+Shift+N)")
-            actionButton("Chat", icon: "bubble.left.and.bubble.right", active: showChat) {
+            actionButton("Chat", icon: "ellipsis.message", active: showChat) {
                 showChat.toggle()
             }
+            .help("Claude Chat (Cmd+Shift+K)")
+            actionButton(commentsButtonLabel, icon: "list.bullet.clipboard", active: showComments) {
+                showComments.toggle()
+            }
+            .help("Show/hide review comments panel with active and resolved notes")
 
             Spacer()
 
@@ -557,10 +562,6 @@ public struct ContentView: View {
                 }
                 .help(url.path)
             }
-            actionButton(commentsButtonLabel, icon: "bubble.left.and.bubble.right", active: showComments) {
-                showComments.toggle()
-            }
-            .help("Show/hide review comments panel with active and resolved notes")
             if let url = fileURL {
                 actionButton("Agent", icon: "arrow.up.doc.on.clipboard") {
                     copyAgentPrompt(url: url)
