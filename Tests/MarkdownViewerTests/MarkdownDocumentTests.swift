@@ -40,4 +40,8 @@ struct MarkdownDocumentTests {
         let doc = MarkdownDocument(text: text)
         #expect(doc.text == text)
     }
+
+    @Test func readableContentTypes() {
+        #expect(!MarkdownDocument.readableContentTypes.isEmpty)
+    }
 }

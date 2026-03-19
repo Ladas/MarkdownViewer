@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import MarkdownViewerLib
 
 @Suite("GitHelper - Diff HTML Rendering")
@@ -70,5 +71,47 @@ struct DiffHTMLTests {
         #expect(html.contains("diff-hunk"))
         #expect(html.contains("diff-del"))
         #expect(html.contains("diff-add"))
+    }
+
+    @Test func indexLine() {
+        let html = GitHelper.diffToHTML("index abc1234..def5678 100644")
+        #expect(html.contains("diff-header"))
+    }
+
+    @Test func producesValidHTML() {
+        let html = GitHelper.diffToHTML("+line")
+        #expect(html.contains("<!DOCTYPE html>"))
+        #expect(html.contains("</html>"))
+    }
+
+    @Test func greaterThanEscaping() {
+        let html = GitHelper.diffToHTML("+if a > b")
+        #expect(html.contains("a &gt; b"))
+    }
+}
+
+@Suite("GitHelper - Git Operations")
+struct GitOperationTests {
+
+    @Test func isGitRepoInRepo() {
+        // This test file is inside the MarkdownViewer git repo
+        let url = URL(fileURLWithPath: #filePath)
+        #expect(GitHelper.isGitRepo(at: url))
+    }
+
+    @Test func isGitRepoOutsideRepo() {
+        let url = URL(fileURLWithPath: "/tmp/not-a-repo-file.txt")
+        #expect(!GitHelper.isGitRepo(at: url))
+    }
+
+    @Test func availableRefsInRepo() {
+        let url = URL(fileURLWithPath: #filePath)
+        let refs = GitHelper.availableRefs(for: url)
+        #expect(refs.contains("HEAD"))
+    }
+
+    @Test func diffReturnsNilOutsideRepo() {
+        let url = URL(fileURLWithPath: "/tmp/not-a-repo-file.txt")
+        #expect(GitHelper.diff(for: url) == nil)
     }
 }
