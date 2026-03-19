@@ -112,11 +112,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
         if coord.lastAppearanceMode != appearanceMode {
             coord.lastAppearanceMode = appearanceMode
-            switch appearanceMode {
-            case "light": webView.appearance = NSAppearance(named: .aqua)
-            case "dark": webView.appearance = NSAppearance(named: .darkAqua)
-            default: webView.appearance = nil
-            }
+            coord.applyAppearance(appearanceMode, to: webView)
             // Force full reload so mermaid re-renders with correct theme
             if coord.pageLoaded {
                 coord.pageLoaded = false
@@ -265,6 +261,14 @@ struct MarkdownWebView: NSViewRepresentable {
             }
         }
 
+        func applyAppearance(_ mode: String, to webView: WKWebView) {
+            switch mode {
+            case "light": webView.appearance = NSAppearance(named: .aqua)
+            case "dark": webView.appearance = NSAppearance(named: .darkAqua)
+            default: webView.appearance = nil
+            }
+        }
+
         // MARK: - WKNavigationDelegate
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -278,12 +282,7 @@ struct MarkdownWebView: NSViewRepresentable {
                 pendingSearch = nil
                 performSearch(search, in: webView)
             }
-            // Re-apply appearance after page reload
-            switch lastAppearanceMode {
-            case "light": webView.appearance = NSAppearance(named: .aqua)
-            case "dark": webView.appearance = NSAppearance(named: .darkAqua)
-            default: webView.appearance = nil
-            }
+            applyAppearance(lastAppearanceMode, to: webView)
         }
 
         func webView(

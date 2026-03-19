@@ -520,32 +520,6 @@
         document.getElementById('content').style.maxWidth = px + 'px';
     }
 
-    // Appearance override — forces both colorScheme meta and CSS overrides
-    function setAppearance(mode) {
-        // Update or create color-scheme meta tag
-        var meta = document.querySelector('meta[name="color-scheme"]');
-        if (!meta) {
-            meta = document.createElement('meta');
-            meta.name = 'color-scheme';
-            document.head.appendChild(meta);
-        }
-
-        if (mode === 'light') {
-            meta.content = 'light';
-            document.documentElement.style.colorScheme = 'light only';
-            document.documentElement.classList.remove('dark-override');
-            document.documentElement.classList.add('light-override');
-        } else if (mode === 'dark') {
-            meta.content = 'dark';
-            document.documentElement.style.colorScheme = 'dark only';
-            document.documentElement.classList.remove('light-override');
-            document.documentElement.classList.add('dark-override');
-        } else {
-            meta.content = 'light dark';
-            document.documentElement.style.colorScheme = '';
-            document.documentElement.classList.remove('light-override', 'dark-override');
-        }
-    }
     </script>
 </body>
 </html>

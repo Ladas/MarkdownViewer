@@ -175,9 +175,7 @@ public struct ContentView: View {
     @State private var navigationTrigger = 0
     @State private var navigationForward = true
     @State private var copyRenderedTrigger = 0
-    @State private var copyHTMLMode = "auto"
     @State private var exportHTMLTrigger = 0
-    @State private var exportHTMLMode = "auto"
     @State private var zoomLevel: Double = 1.0
     @State private var showCopied = false
     @State private var showTOC = false
@@ -206,9 +204,7 @@ public struct ContentView: View {
 
     @State private var tocEntries: [TOCEntry] = []
 
-    private var activeNotes: [String] {
-        ReviewNote.extract(from: currentText)
-    }
+    @State private var activeNotes: [String] = []
 
     private var commentsButtonLabel: String {
         let active = activeNotes.count
@@ -251,9 +247,9 @@ public struct ContentView: View {
                     navigationTrigger: navigationTrigger,
                     navigationForward: navigationForward,
                     copyRenderedTrigger: copyRenderedTrigger,
-                    copyHTMLMode: copyHTMLMode,
+                    copyHTMLMode: appearanceMode,
                     exportHTMLTrigger: exportHTMLTrigger,
-                    exportHTMLMode: exportHTMLMode,
+                    exportHTMLMode: appearanceMode,
                     zoomLevel: zoomLevel,
                     scrollToHeadingTrigger: scrollToHeadingTrigger,
                     scrollToHeadingIndex: scrollToHeadingIndex,
@@ -308,7 +304,8 @@ public struct ContentView: View {
         }
         .onAppear {
             tocEntries = TOCEntry.parse(from: currentText)
-            previousNotes = ReviewNote.extract(from: currentText)
+            activeNotes = ReviewNote.extract(from: currentText)
+            previousNotes = activeNotes
             startFileWatcher()
             checkGitRepo()
         }
@@ -318,6 +315,7 @@ public struct ContentView: View {
         }
         .onChange(of: currentText) { _ in
             tocEntries = TOCEntry.parse(from: currentText)
+            activeNotes = ReviewNote.extract(from: currentText)
             if showDiff { updateDiff() }
             detectResolvedNotes()
         }
@@ -445,9 +443,7 @@ public struct ContentView: View {
                 .help("Content width: \(Int(contentWidth))px")
             if let url = fileURL {
                 actionButton("Path", icon: "doc.on.clipboard") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(url.path, forType: .string)
-                    showCopiedToast()
+                    copyToClipboard(url.path)
                 }
                 .help(url.path)
             }
@@ -630,8 +626,9 @@ public struct ContentView: View {
     }
 
     private func detectResolvedNotes() {
-        let newNotes = ReviewNote.extract(from: currentText)
-        let disappeared = previousNotes.filter { !newNotes.contains($0) }
+        let newNotes = activeNotes
+        let newSet = Set(newNotes)
+        let disappeared = previousNotes.filter { !newSet.contains($0) }
 
         if !disappeared.isEmpty {
             let diff = computeSimpleDiff(old: previousNotes, new: newNotes)
@@ -647,11 +644,13 @@ public struct ContentView: View {
     }
 
     private func computeSimpleDiff(old: [String], new: [String]) -> String {
+        let oldSet = Set(old)
+        let newSet = Set(new)
         var lines = [String]()
-        for note in old where !new.contains(note) {
+        for note in old where !newSet.contains(note) {
             lines.append("- \(note.prefix(60))...")
         }
-        for note in new where !old.contains(note) {
+        for note in new where !oldSet.contains(note) {
             lines.append("+ \(note.prefix(60))...")
         }
         return lines.joined(separator: "\n")
@@ -779,16 +778,20 @@ public struct ContentView: View {
 
     private func cycleAppearance() {
         switch appearanceMode {
-        case "auto": appearanceMode = "light"; copyHTMLMode = "light"; exportHTMLMode = "light"
-        case "light": appearanceMode = "dark"; copyHTMLMode = "dark"; exportHTMLMode = "dark"
-        default: appearanceMode = "auto"; copyHTMLMode = "auto"; exportHTMLMode = "auto"
+        case "auto": appearanceMode = "light"
+        case "light": appearanceMode = "dark"
+        default: appearanceMode = "auto"
         }
     }
 
-    private func copySource() {
+    private func copyToClipboard(_ text: String) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(currentText, forType: .string)
+        NSPasteboard.general.setString(text, forType: .string)
         showCopiedToast()
+    }
+
+    private func copySource() {
+        copyToClipboard(currentText)
     }
 
     private func copyRendered() {
@@ -812,9 +815,7 @@ public struct ContentView: View {
 
         Find all ```review blocks in the file, address each one, then remove the block once resolved. Keep the rest of the document intact.
         """
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(prompt, forType: .string)
-        showCopiedToast()
+        copyToClipboard(prompt)
     }
 
     private func saveHTMLFile(_ html: String) {
