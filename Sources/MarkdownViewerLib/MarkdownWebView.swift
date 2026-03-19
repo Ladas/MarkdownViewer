@@ -20,6 +20,9 @@ struct MarkdownWebView: NSViewRepresentable {
     var onExportHTML: ((String) -> Void)?
     var onEditNote: ((Int, String) -> Void)?
     var onAddNoteAtHeading: ((String) -> Void)?
+    var onCommentNote: ((String) -> Void)?
+    var onExplainWithClaude: ((String) -> Void)?
+    var onAskClaude: ((String) -> Void)?
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -28,7 +31,8 @@ struct MarkdownWebView: NSViewRepresentable {
         config.userContentController.add(context.coordinator, name: "exportHTML")
         config.userContentController.add(context.coordinator, name: "editNote")
         config.userContentController.add(context.coordinator, name: "addNoteAtHeading")
-        let webView = WKWebView(frame: .zero, configuration: config)
+        let webView = MarkdownWKWebView(frame: .zero, configuration: config)
+        webView.coordinator = context.coordinator
         webView.navigationDelegate = context.coordinator
         webView.allowsMagnification = true
         context.coordinator.lastMarkdown = markdown
@@ -46,6 +50,9 @@ struct MarkdownWebView: NSViewRepresentable {
         coord.onExportHTML = onExportHTML
         coord.onEditNote = onEditNote
         coord.onAddNoteAtHeading = onAddNoteAtHeading
+        coord.onCommentNote = onCommentNote
+        coord.onExplainWithClaude = onExplainWithClaude
+        coord.onAskClaude = onAskClaude
 
         let contentChanged = coord.lastMarkdown != markdown || coord.lastOverrideHTML != overrideHTML
         if contentChanged {
@@ -149,6 +156,9 @@ struct MarkdownWebView: NSViewRepresentable {
         var onExportHTML: ((String) -> Void)?
         var onEditNote: ((Int, String) -> Void)?
         var onAddNoteAtHeading: ((String) -> Void)?
+        var onCommentNote: ((String) -> Void)?
+        var onExplainWithClaude: ((String) -> Void)?
+        var onAskClaude: ((String) -> Void)?
 
         // MARK: - WKScriptMessageHandler
 
@@ -277,6 +287,72 @@ struct MarkdownWebView: NSViewRepresentable {
                 return
             }
             decisionHandler(.allow)
+        }
+    }
+}
+
+// MARK: - WKWebView subclass for context menu
+
+class MarkdownWKWebView: WKWebView {
+    weak var coordinator: MarkdownWebView.Coordinator?
+
+    override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        menu.addItem(NSMenuItem.separator())
+
+        let commentItem = NSMenuItem(
+            title: "Comment",
+            action: #selector(commentSelection(_:)),
+            keyEquivalent: ""
+        )
+        commentItem.target = self
+        commentItem.image = NSImage(systemSymbolName: "bubble.left", accessibilityDescription: "Comment")
+        menu.addItem(commentItem)
+
+        let claudeMenu = NSMenu(title: "Claude")
+
+        let explainItem = NSMenuItem(
+            title: "Explain",
+            action: #selector(explainWithClaude(_:)),
+            keyEquivalent: ""
+        )
+        explainItem.target = self
+        claudeMenu.addItem(explainItem)
+
+        let askItem = NSMenuItem(
+            title: "Ask...",
+            action: #selector(askClaude(_:)),
+            keyEquivalent: ""
+        )
+        askItem.target = self
+        claudeMenu.addItem(askItem)
+
+        let claudeItem = NSMenuItem(title: "Claude", action: nil, keyEquivalent: "")
+        claudeItem.image = NSImage(systemSymbolName: "sparkle", accessibilityDescription: "Claude")
+        claudeItem.submenu = claudeMenu
+        menu.addItem(claudeItem)
+
+        super.willOpenMenu(menu, with: event)
+    }
+
+    @objc private func commentSelection(_ sender: Any?) {
+        evaluateJavaScript("window.getSelection().toString()") { [weak self] result, _ in
+            guard let text = result as? String else { return }
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            self?.coordinator?.onCommentNote?(trimmed)
+        }
+    }
+
+    @objc private func explainWithClaude(_ sender: Any?) {
+        evaluateJavaScript("window.getSelection().toString()") { [weak self] result, _ in
+            guard let text = result as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            self?.coordinator?.onExplainWithClaude?(text)
+        }
+    }
+
+    @objc private func askClaude(_ sender: Any?) {
+        evaluateJavaScript("var s = window.getSelection(); var t = s.toString(); s.removeAllRanges(); t") { [weak self] result, _ in
+            guard let text = result as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            self?.coordinator?.onAskClaude?(text)
         }
     }
 }

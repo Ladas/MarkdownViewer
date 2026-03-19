@@ -15,13 +15,16 @@ struct MarkdownViewerApp: App {
     @FocusedValue(\.addNote) var addNote
     @FocusedValue(\.toggleTOC) var toggleTOC
     @FocusedValue(\.toggleDiff) var toggleDiff
+    @FocusedValue(\.toggleChat) var toggleChat
     @FocusedValue(\.setAppearance) var setAppearance
 
     var body: some Scene {
         DocumentGroup(viewing: MarkdownDocument.self) { config in
             ContentView(document: config.document, fileURL: config.fileURL)
                 .navigationSubtitle(config.fileURL?.path ?? "")
+                .frame(idealWidth: 1300, idealHeight: 900)
         }
+        .defaultSize(width: 1300, height: 900)
         .commands {
             CommandGroup(replacing: .textEditing) {
                 Button("Find...") {
@@ -93,6 +96,11 @@ struct MarkdownViewerApp: App {
                     toggleDiff?()
                 }
                 .keyboardShortcut("d", modifiers: .command)
+
+                Button("Claude Chat") {
+                    toggleChat?()
+                }
+                .keyboardShortcut("k", modifiers: [.command, .shift])
 
                 Divider()
 
