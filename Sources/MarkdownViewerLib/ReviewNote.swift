@@ -37,24 +37,28 @@ public enum ReviewNote {
         } else {
             var start = range.lowerBound
             var end = range.upperBound
-            // Consume trailing newlines
-            while end < text.endIndex && text[end] == "\n" {
-                end = text.index(after: end)
+            // Consume up to 2 trailing newlines
+            for _ in 0..<2 {
+                if end < text.endIndex && text[end] == "\n" {
+                    end = text.index(after: end)
+                }
             }
             // Consume up to 2 leading newlines
-            if start > text.startIndex {
-                let before = text.index(before: start)
-                if text[before] == "\n" {
-                    start = before
-                    if start > text.startIndex {
-                        let before2 = text.index(before: start)
-                        if text[before2] == "\n" {
-                            start = before2
-                        }
+            for _ in 0..<2 {
+                if start > text.startIndex {
+                    let before = text.index(before: start)
+                    if text[before] == "\n" {
+                        start = before
+                    } else {
+                        break
                     }
                 }
             }
-            result.replaceSubrange(start..<end, with: "")
+            // Ensure we leave a blank line between surrounding content
+            let hasBefore = start > text.startIndex
+            let hasAfter = end < text.endIndex
+            let separator = (hasBefore && hasAfter) ? "\n\n" : ""
+            result.replaceSubrange(start..<end, with: separator)
         }
         return result
     }
