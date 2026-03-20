@@ -478,15 +478,13 @@
                     var rowBg = (ri % 2 === 1) ? '#f6f8fa' : '#ffffff';
                     td.setAttribute('bgcolor', rowBg);
                     td.style.cssText = cellBorder + ';text-align:left;background-color:' + rowBg;
+                    // Unwrap <p> tags — they add padding in Google Docs
+                    td.querySelectorAll('p').forEach(function(p) {
+                        while (p.firstChild) p.parentNode.insertBefore(p.firstChild, p);
+                        p.remove();
+                    });
                 }
             }
-
-            // Force left-align on all paragraphs inside cells
-            clone.querySelectorAll('td p, td li').forEach(function(el) {
-                el.style.textAlign = 'left';
-                el.style.marginTop = '0';
-                el.style.marginBottom = '0';
-            });
 
             clone.querySelectorAll('img').forEach(function(img) {
                 img.style.maxWidth = '100%';
