@@ -481,6 +481,13 @@
                 }
             }
 
+            // Force left-align on all paragraphs inside cells
+            clone.querySelectorAll('td p, td li').forEach(function(el) {
+                el.style.textAlign = 'left';
+                el.style.marginTop = '0';
+                el.style.marginBottom = '0';
+            });
+
             clone.querySelectorAll('img').forEach(function(img) {
                 img.style.maxWidth = '100%';
             });
