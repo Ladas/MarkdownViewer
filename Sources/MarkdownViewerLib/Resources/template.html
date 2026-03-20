@@ -24,7 +24,10 @@
             if (typeof DOMPurify !== 'undefined') {
                 rawHTML = DOMPurify.sanitize(rawHTML, {
                     FORBID_TAGS: ['foreignObject'],
-                    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'xlink:href']
+                    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onmouseenter',
+                        'onfocus', 'onblur', 'onanimationend', 'ontransitionend', 'onpointerover',
+                        'onmousedown', 'onmouseup', 'onkeydown', 'onkeyup', 'onsubmit',
+                        'xlink:href']
                 });
                 document.getElementById('content').innerHTML = rawHTML;
             } else {
@@ -41,13 +44,29 @@
             el.appendChild(pre);
         }
 
+        // Sanitize mermaid text for securityLevel:'loose' while preventing XSS
+        function sanitizeMermaidText(text) {
+            // 1. Strip HTML tags except <br> and <br/>
+            text = text.replace(/<(?!\/?br\s*\/?\s*>)\/?[a-zA-Z][^>]*>/gi, '');
+            // 2. Strip mermaid click/href directives (javascript: URI XSS vector)
+            text = text.replace(/^\s*click\s+\S+\s+(href|callback)\s+.*$/gim, '');
+            text = text.replace(/^\s*click\s+\S+\s+"javascript:.*$/gim, '');
+            // 3. Strip url() from style/classDef values (CSS exfiltration)
+            text = text.replace(/url\s*\([^)]*\)/gi, 'none');
+            // 4. Rename 'default' used as node/subgraph ID (reserved word in mermaid)
+            text = text.replace(/\bsubgraph\s+default\b/g, 'subgraph _default');
+            text = text.replace(/\bstyle\s+default\b/g, 'style _default');
+            return text;
+        }
+
         document.querySelectorAll('code.language-mermaid').forEach(function(el) {
             var pre = el.parentElement;
             var div = document.createElement('pre');
             div.className = 'mermaid';
-            // Replace literal \n with actual newlines for mermaid line breaks
-            // (safe: no innerHTML, mermaid in strict mode handles \n in labels)
-            div.textContent = el.textContent.replace(/\\n/g, '\n');
+            var sanitized = sanitizeMermaidText(el.textContent);
+            // Replace literal \n with <br/> for line breaks in labels
+            sanitized = sanitized.replace(/\\n/g, '<br/>');
+            div.textContent = sanitized;
             pre.replaceWith(div);
         });
 
@@ -86,8 +105,8 @@
         if (typeof mermaid !== 'undefined') {
             var config = {
                 startOnLoad: false,
-                securityLevel: 'strict',
-                flowchart: { useMaxWidth: true },
+                securityLevel: 'loose',
+                flowchart: { htmlLabels: true, useMaxWidth: true },
                 sequence: { useMaxWidth: true },
                 gantt: { useMaxWidth: true }
             };
