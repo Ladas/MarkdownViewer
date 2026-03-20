@@ -468,7 +468,74 @@ class MarkdownWKWebView: WKWebView {
         claudeItem.submenu = claudeMenu
         menu.addItem(claudeItem)
 
+        // Diagram copy/save options
+        let copyDiagramItem = NSMenuItem(
+            title: "Copy Diagram as PNG",
+            action: #selector(copyDiagramAsPNG(_:)),
+            keyEquivalent: ""
+        )
+        copyDiagramItem.target = self
+        copyDiagramItem.image = NSImage(systemSymbolName: "photo.on.rectangle", accessibilityDescription: "Copy Diagram")
+        menu.addItem(copyDiagramItem)
+
+        let saveDiagramItem = NSMenuItem(
+            title: "Save Diagram...",
+            action: #selector(saveDiagram(_:)),
+            keyEquivalent: ""
+        )
+        saveDiagramItem.target = self
+        saveDiagramItem.image = NSImage(systemSymbolName: "square.and.arrow.down", accessibilityDescription: "Save Diagram")
+        menu.addItem(saveDiagramItem)
+
         super.willOpenMenu(menu, with: event)
+    }
+
+    @objc private func copyDiagramAsPNG(_ sender: Any?) {
+        // Find the SVG under the click point by asking JS
+        evaluateJavaScript("""
+            (function() {
+                var el = document.elementFromPoint(\(lastClickPoint.x), \(lastClickPoint.y));
+                var svg = el ? (el.closest('svg') || el.closest('.mermaid-container svg') || el.closest('pre.mermaid svg')) : null;
+                if (!svg) return null;
+                return { found: true };
+            })()
+        """) { [weak self] result, _ in
+            if result != nil {
+                self?.evaluateJavaScript("""
+                    (function() {
+                        var el = document.elementFromPoint(\(self?.lastClickPoint.x ?? 0), \(self?.lastClickPoint.y ?? 0));
+                        var svg = el ? (el.closest('svg') || el.closest('.mermaid-container svg') || el.closest('pre.mermaid svg')) : null;
+                        if (svg) {
+                            svgToPngDataUrl(svg).then(function(url) {
+                                postToHandler('copyImage', url);
+                            });
+                        }
+                    })()
+                """) { _, _ in }
+            }
+        }
+    }
+
+    @objc private func saveDiagram(_ sender: Any?) {
+        evaluateJavaScript("""
+            (function() {
+                var el = document.elementFromPoint(\(lastClickPoint.x), \(lastClickPoint.y));
+                var svg = el ? (el.closest('svg') || el.closest('.mermaid-container svg') || el.closest('pre.mermaid svg')) : null;
+                if (svg) {
+                    svgToPngDataUrl(svg).then(function(url) {
+                        postToHandler('copyImage', url);
+                    });
+                }
+            })()
+        """) { _, _ in }
+    }
+
+    private var lastClickPoint: CGPoint = .zero
+
+    override func rightMouseDown(with event: NSEvent) {
+        let loc = convert(event.locationInWindow, from: nil)
+        lastClickPoint = CGPoint(x: loc.x, y: bounds.height - loc.y)
+        super.rightMouseDown(with: event)
     }
 
     @objc private func commentSelection(_ sender: Any?) {
