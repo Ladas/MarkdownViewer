@@ -419,11 +419,26 @@
             table.setAttribute('cellspacing', '0');
             table.setAttribute('style', 'border-collapse:collapse');
         });
+        // For GDoc paste: light header background + dark text (always readable)
+        // Google Docs adds white text highlights on paste — dark text avoids this
+        var thBgLight = thBgHex;
+        var thColorDark = '#000000';
+        // If header bg is dark (white text), use a light tint instead
+        if (thColorHex === '#ffffff' || thColorHex === '#fff') {
+            // Create light tint: parse hex, blend with white at 15%
+            var r = parseInt(thBgHex.slice(1,3), 16);
+            var g = parseInt(thBgHex.slice(3,5), 16);
+            var b = parseInt(thBgHex.slice(5,7), 16);
+            thBgLight = '#' + [r,g,b].map(function(c) {
+                return ('0' + Math.round(c + (255-c) * 0.82).toString(16)).slice(-2);
+            }).join('');
+            thColorDark = thBgHex; // Use original dark color as text
+        }
         clone.querySelectorAll('th').forEach(function(th) {
             var text = th.textContent;
-            th.setAttribute('bgcolor', thBgHex);
+            th.setAttribute('bgcolor', thBgLight);
             th.removeAttribute('style');
-            th.innerHTML = '<b><font color="' + thColorHex + '">' + escapeHtml(text) + '</font></b>';
+            th.innerHTML = '<b><font color="' + thColorDark + '">' + escapeHtml(text) + '</font></b>';
         });
         clone.querySelectorAll('td').forEach(function(td) {
             td.removeAttribute('style');
