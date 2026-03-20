@@ -299,15 +299,32 @@
 
     function svgToPngDataUrl(svg) {
         return new Promise(function(resolve, reject) {
-            var rect = svg.getBoundingClientRect();
-            var w = Math.ceil(rect.width);
-            var h = Math.ceil(rect.height);
+            // Use getBBox for tight content bounds (no padding/empty space)
+            var bbox;
+            try { bbox = svg.getBBox(); } catch(e) { bbox = null; }
+            var displayRect = svg.getBoundingClientRect();
+
+            var w, h;
+            if (bbox && bbox.width > 0 && bbox.height > 0) {
+                // Add small padding around content
+                var pad = 10;
+                w = Math.ceil(bbox.width + pad * 2);
+                h = Math.ceil(bbox.height + pad * 2);
+            } else {
+                w = Math.ceil(displayRect.width);
+                h = Math.ceil(displayRect.height);
+            }
             if (w === 0 || h === 0) { reject(new Error('zero size')); return; }
 
             var clone = svg.cloneNode(true);
+            clone.removeAttribute('style');
+            // Set viewBox to tight content bounds
+            if (bbox && bbox.width > 0) {
+                var pad = 10;
+                clone.setAttribute('viewBox', (bbox.x - pad) + ' ' + (bbox.y - pad) + ' ' + (bbox.width + pad*2) + ' ' + (bbox.height + pad*2));
+            }
             clone.setAttribute('width', w);
             clone.setAttribute('height', h);
-            clone.removeAttribute('style'); // Remove CSS constraints like max-width
 
             // Strip SMIL animations (they break canvas rendering of data URI SVGs)
             clone.querySelectorAll('animate, animateMotion, animateTransform, set').forEach(function(a) { a.remove(); });
