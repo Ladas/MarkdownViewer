@@ -270,14 +270,34 @@
             table.setAttribute('cellpadding', '0');
             table.setAttribute('cellspacing', '0');
         });
+        // Convert rgb() to hex for Google Docs compatibility
+        function rgbToHex(rgb) {
+            if (!rgb || rgb.indexOf('rgb') === -1) return rgb;
+            var parts = rgb.match(/\d+/g);
+            if (!parts || parts.length < 3) return rgb;
+            return '#' + parts.slice(0, 3).map(function(x) {
+                return ('0' + parseInt(x).toString(16)).slice(-2);
+            }).join('');
+        }
+        var thBgHex = rgbToHex(thBg);
+        var thColorHex = rgbToHex(thColor);
+
         clone.querySelectorAll('th').forEach(function(th) {
             th.style.padding = '8px 16px';
             th.style.border = '1px solid ' + thBorder;
             th.style.fontWeight = '600';
-            th.style.backgroundColor = thBg;
-            th.style.color = thColor;
+            th.style.backgroundColor = thBgHex;
+            th.style.color = thColorHex;
             th.style.textAlign = 'left';
             th.style.whiteSpace = 'nowrap';
+            // HTML bgcolor attribute — Google Docs respects this
+            th.setAttribute('bgcolor', thBgHex);
+            // Force all children to match th colors (Google Docs doesn't inherit)
+            th.querySelectorAll('*').forEach(function(child) {
+                child.style.backgroundColor = thBgHex;
+                child.style.color = thColorHex;
+                child.style.background = thBgHex;
+            });
         });
         clone.querySelectorAll('td').forEach(function(td) {
             td.style.padding = '8px 16px';
