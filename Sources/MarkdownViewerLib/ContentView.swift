@@ -177,6 +177,7 @@ public struct ContentView: View {
     @State private var exportHTMLTrigger = 0
     @State private var zoomLevel: Double = 1.0
     @State private var showCopied = false
+    @State private var copyingStatus = ""
     @State private var showTOC = false
     @State private var showDiff = false
     @State private var diffRef = "HEAD"
@@ -305,15 +306,29 @@ public struct ContentView: View {
         }
         .frame(minWidth: 1100, minHeight: 750)
         .overlay(alignment: .topTrailing) {
-            if showCopied {
-                Text("Copied!")
-                    .font(.caption)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
+            VStack(spacing: 6) {
+                if !copyingStatus.isEmpty {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(copyingStatus)
+                            .font(.caption)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-                    .padding(12)
                     .transition(.opacity)
+                }
+                if showCopied {
+                    Text("Copied!")
+                        .font(.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                        .transition(.opacity)
+                }
             }
+            .padding(12)
         }
         .focusedValue(\.toggleSearch, toggleSearch)
         .focusedValue(\.findNext, findNext)
@@ -611,8 +626,11 @@ public struct ContentView: View {
                 .help("Copy raw markdown source to clipboard (Cmd+Shift+C)")
             actionButton("HTML", icon: "doc.richtext") { copyRendered() }
                 .help("Copy as standalone HTML with CSS and diagrams as PNG (Cmd+Option+C)")
-            actionButton("GDoc", icon: "doc.on.doc") { copyGDocsTrigger += 1 }
-                .help("Copy for Google Docs — optimized paste with inline styles and diagrams as PNG")
+            actionButton("GDoc", icon: "doc.on.doc") {
+                copyingStatus = "Preparing for Google Docs..."
+                copyGDocsTrigger += 1
+            }
+            .help("Copy for Google Docs — optimized paste with inline styles and diagrams as PNG")
             actionButton("Export", icon: "square.and.arrow.up") { exportHTML() }
                 .help("Save as standalone HTML file (Cmd+E)")
         }
@@ -1159,7 +1177,7 @@ public struct ContentView: View {
     }
 
     private func showCopiedToast() {
-        withAnimation { showCopied = true }
+        withAnimation { copyingStatus = ""; showCopied = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             withAnimation { showCopied = false }
         }

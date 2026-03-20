@@ -295,6 +295,8 @@
     }
 
     // Convert SVG to PNG — strips animations for static capture
+    var _pngScale = 2; // Default 2x retina, set to 1 for smaller GDoc copy
+
     function svgToPngDataUrl(svg) {
         return new Promise(function(resolve, reject) {
             var rect = svg.getBoundingClientRect();
@@ -337,7 +339,7 @@
             var encoded = btoa(unescape(encodeURIComponent(svgData)));
 
             var canvas = document.createElement('canvas');
-            var scale = 2;
+            var scale = _pngScale;
             canvas.width = w * scale;
             canvas.height = h * scale;
             var ctx = canvas.getContext('2d');
@@ -711,7 +713,10 @@
     // Copy for Google Docs — Google Docs native clipboard format
     async function copyForGoogleDocs() {
         try {
+            // Use 1x scale for GDoc copy (smaller clipboard size)
+            _pngScale = 1;
             var clone = await prepareCleanContent(false);
+            _pngScale = 2; // Restore for other uses
             var content = document.getElementById('content');
 
             // Sample colors from live DOM
