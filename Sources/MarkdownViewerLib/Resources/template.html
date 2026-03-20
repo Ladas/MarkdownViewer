@@ -262,14 +262,6 @@
         var preBorder = (cs('pre:not(.mermaid)') || {}).borderLeftColor || 'transparent';
         var linkColor = (cs('a') || {}).color || '#0969da';
 
-        clone.querySelectorAll('table').forEach(function(table) {
-            table.style.borderCollapse = 'collapse';
-            table.style.borderSpacing = '0';
-            table.style.marginBottom = '16px';
-            table.style.fontSize = '14px';
-            table.setAttribute('cellpadding', '0');
-            table.setAttribute('cellspacing', '0');
-        });
         // Convert rgb() to hex for Google Docs compatibility
         function rgbToHex(rgb) {
             if (!rgb || rgb.indexOf('rgb') === -1) return rgb;
@@ -282,32 +274,31 @@
         var thBgHex = rgbToHex(thBg);
         var thColorHex = rgbToHex(thColor);
 
+        // Google Docs table styling: use HTML attributes (bgcolor, border, width)
+        // CSS properties are often stripped or ignored
+        clone.querySelectorAll('table').forEach(function(table) {
+            table.setAttribute('border', '1');
+            table.setAttribute('cellpadding', '8');
+            table.setAttribute('cellspacing', '0');
+            table.setAttribute('width', '100%');
+            table.style.borderCollapse = 'collapse';
+            table.style.marginBottom = '16px';
+        });
         clone.querySelectorAll('th').forEach(function(th) {
-            th.style.padding = '8px 16px';
-            th.style.border = '1px solid ' + thBorder;
-            th.style.fontWeight = '600';
-            th.style.backgroundColor = thBgHex;
-            th.style.color = thColorHex;
-            th.style.textAlign = 'left';
-            th.style.whiteSpace = 'nowrap';
-            // HTML bgcolor attribute — Google Docs respects this
             th.setAttribute('bgcolor', thBgHex);
-            // Force all children to match th colors (Google Docs doesn't inherit)
-            th.querySelectorAll('*').forEach(function(child) {
-                child.style.backgroundColor = thBgHex;
-                child.style.color = thColorHex;
-                child.style.background = thBgHex;
-            });
+            th.style.cssText = 'padding:8px 12px;font-weight:600;text-align:left;color:' + thColorHex + ';background-color:' + thBgHex;
+            // Unwrap inline elements — flatten to plain text with styling
+            // This prevents Google Docs from adding white text backgrounds
+            var text = th.textContent;
+            th.textContent = text;
+            th.setAttribute('bgcolor', thBgHex);
+            th.style.color = thColorHex;
+            th.style.backgroundColor = thBgHex;
+            th.style.fontWeight = '600';
+            th.style.padding = '8px 12px';
         });
         clone.querySelectorAll('td').forEach(function(td) {
-            td.style.padding = '8px 16px';
-            td.style.border = '1px solid ' + tdBorder;
-            td.style.textAlign = 'left';
-        });
-        clone.querySelectorAll('tr:nth-child(2n)').forEach(function(tr) {
-            tr.querySelectorAll('td').forEach(function(td) {
-                td.style.backgroundColor = '#f6f8fa';
-            });
+            td.style.cssText = 'padding:8px 12px;text-align:left;vertical-align:top';
         });
         clone.querySelectorAll('pre').forEach(function(pre) {
             if (pre.classList.contains('mermaid')) return;
