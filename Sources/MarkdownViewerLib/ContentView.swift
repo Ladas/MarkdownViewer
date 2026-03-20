@@ -173,6 +173,7 @@ public struct ContentView: View {
     @State private var navigationTrigger = 0
     @State private var navigationForward = true
     @State private var copyRenderedTrigger = 0
+    @State private var copyGDocsTrigger = 0
     @State private var exportHTMLTrigger = 0
     @State private var zoomLevel: Double = 1.0
     @State private var showCopied = false
@@ -266,6 +267,7 @@ public struct ContentView: View {
                     navigationTrigger: navigationTrigger,
                     navigationForward: navigationForward,
                     copyRenderedTrigger: copyRenderedTrigger,
+                    copyGDocsTrigger: copyGDocsTrigger,
                     copyHTMLMode: appearanceMode,
                     exportHTMLTrigger: exportHTMLTrigger,
                     exportHTMLMode: appearanceMode,
@@ -609,6 +611,8 @@ public struct ContentView: View {
                 .help("Copy raw markdown source to clipboard (Cmd+Shift+C)")
             actionButton("HTML", icon: "doc.richtext") { copyRendered() }
                 .help("Copy as standalone HTML with CSS and diagrams as PNG (Cmd+Option+C)")
+            actionButton("GDoc", icon: "doc.on.doc") { copyGDocsTrigger += 1 }
+                .help("Copy for Google Docs — optimized paste with inline styles and diagrams as PNG")
             actionButton("Export", icon: "square.and.arrow.up") { exportHTML() }
                 .help("Save as standalone HTML file (Cmd+E)")
         }

@@ -9,6 +9,7 @@ struct MarkdownWebView: NSViewRepresentable {
     var navigationTrigger: Int = 0
     var navigationForward: Bool = true
     var copyRenderedTrigger: Int = 0
+    var copyGDocsTrigger: Int = 0
     var copyHTMLMode: String = "auto"
     var exportHTMLTrigger: Int = 0
     var exportHTMLMode: String = "auto"
@@ -34,6 +35,7 @@ struct MarkdownWebView: NSViewRepresentable {
         config.userContentController.add(context.coordinator, name: "copyImage")
         config.userContentController.add(context.coordinator, name: "copyRendered")
         config.userContentController.add(context.coordinator, name: "exportHTML")
+        config.userContentController.add(context.coordinator, name: "copyGoogleDocs")
         config.userContentController.add(context.coordinator, name: "editNote")
         config.userContentController.add(context.coordinator, name: "addNoteAtHeading")
         let webView = MarkdownWKWebView(frame: .zero, configuration: config)
@@ -113,6 +115,13 @@ struct MarkdownWebView: NSViewRepresentable {
             webView.evaluateJavaScript("copyRenderedContent('\(safeMode)')") { _, _ in }
         }
 
+        let gDocsChanged = coord.lastCopyGDocsTrigger != copyGDocsTrigger
+        if gDocsChanged {
+            coord.lastCopyGDocsTrigger = copyGDocsTrigger
+            guard coord.pageLoaded else { return }
+            webView.evaluateJavaScript("copyForGoogleDocs()") { _, _ in }
+        }
+
         let exportChanged = coord.lastExportHTMLTrigger != exportHTMLTrigger
         if exportChanged {
             coord.lastExportHTMLTrigger = exportHTMLTrigger
@@ -156,7 +165,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
         let controller = webView.configuration.userContentController
-        for name in ["copyImage", "copyRendered", "exportHTML", "editNote", "addNoteAtHeading"] {
+        for name in ["copyImage", "copyRendered", "copyGoogleDocs", "exportHTML", "editNote", "addNoteAtHeading"] {
             controller.removeScriptMessageHandler(forName: name)
         }
     }
@@ -174,6 +183,7 @@ struct MarkdownWebView: NSViewRepresentable {
         var lastSearchText: String?
         var lastNavTrigger: Int = 0
         var lastCopyRenderedTrigger: Int = 0
+        var lastCopyGDocsTrigger: Int = 0
         var lastExportHTMLTrigger: Int = 0
         var lastScrollTrigger: Int = 0
         var lastZoomLevel: Double = 1.0
@@ -199,6 +209,8 @@ struct MarkdownWebView: NSViewRepresentable {
         ) {
             if message.name == "copyImage" {
                 handleCopyImage(message)
+            } else if message.name == "copyGoogleDocs" {
+                handleCopyGoogleDocs(message)
             } else if message.name == "copyRendered" {
                 handleCopyRendered(message)
             } else if message.name == "exportHTML" {
@@ -238,6 +250,15 @@ struct MarkdownWebView: NSViewRepresentable {
             // .html for rich paste (Google Docs), .string for plain text paste
             pasteboard.setString(html, forType: .html)
             pasteboard.setString(html, forType: .string)
+            onCopyDone?()
+        }
+
+        private func handleCopyGoogleDocs(_ message: WKScriptMessage) {
+            guard let html = message.body as? String else { return }
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            // Only .html — Google Docs reads this as rich content fragment
+            pasteboard.setString(html, forType: .html)
             onCopyDone?()
         }
 

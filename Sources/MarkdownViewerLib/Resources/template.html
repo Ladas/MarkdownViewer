@@ -401,6 +401,13 @@
             + '\n</article>\n</body>\n</html>';
     }
 
+    // Copy just the styled innerHTML fragment for Google Docs
+    async function copyForGoogleDocs() {
+        var clone = await prepareCleanContent();
+        // Google Docs only needs the fragment, no <html>/<style> wrapper
+        postToHandler('copyGoogleDocs', clone.innerHTML);
+    }
+
     function postToHandler(name, body) {
         if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[name]) {
             window.webkit.messageHandlers[name].postMessage(body);
