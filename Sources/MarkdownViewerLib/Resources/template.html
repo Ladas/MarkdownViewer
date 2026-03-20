@@ -8,6 +8,7 @@
     <style>/* {{VENDOR_CSS}} */</style>
     <style>/* {{FA_CSS}} */</style>
     <style>/* {{CSS}} */</style>
+    <style id="theme-css"></style>
     <script>/* {{PURIFY_JS}} */</script>
     <script>/* {{MARKED_JS}} */</script>
     <script>/* {{MERMAID_JS}} */</script>
@@ -560,6 +561,12 @@
     // The Swift side triggers a content reload which preserves scroll position
 
     // Content width control
+    // Apply theme CSS for tables, headings, etc.
+    function setThemeCSS(css) {
+        var el = document.getElementById('theme-css');
+        if (el) el.textContent = css;
+    }
+
     function setContentWidth(px) {
         document.getElementById('content').style.maxWidth = px + 'px';
     }

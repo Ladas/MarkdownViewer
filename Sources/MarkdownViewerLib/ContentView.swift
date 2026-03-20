@@ -274,6 +274,7 @@ public struct ContentView: View {
                     appearanceMode: appearanceMode,
                     contentWidth: contentWidth,
                     mermaidThemeJSON: mermaidTheme.initJSON,
+                    themeCSS: mermaidTheme.css,
                     onSearchResult: { total, current in
                         matchTotal = total
                         matchCurrent = current

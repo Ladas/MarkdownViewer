@@ -18,6 +18,7 @@ struct MarkdownWebView: NSViewRepresentable {
     var appearanceMode: String = "auto"
     var contentWidth: Double = 980
     var mermaidThemeJSON: String = ""
+    var themeCSS: String = ""
     var onSearchResult: ((Int, Int) -> Void)?
     var onCopyDone: (() -> Void)?
     var onExportHTML: ((String) -> Void)?
@@ -42,12 +43,7 @@ struct MarkdownWebView: NSViewRepresentable {
         context.coordinator.lastOverrideHTML = overrideHTML
 
         var html = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
-        if !mermaidThemeJSON.isEmpty {
-            html = html.replacingOccurrences(
-                of: "var _mermaidCustomInit = null;",
-                with: "var _mermaidCustomInit = \(mermaidThemeJSON);"
-            )
-        }
+        html = injectTheme(html)
         webView.loadHTMLString(html, baseURL: nil)
         return webView
     }
@@ -70,12 +66,7 @@ struct MarkdownWebView: NSViewRepresentable {
             coord.lastSearchText = nil
             coord.pageLoaded = false
             var htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
-            if !mermaidThemeJSON.isEmpty {
-                htmlToLoad = htmlToLoad.replacingOccurrences(
-                    of: "var _mermaidCustomInit = null;",
-                    with: "var _mermaidCustomInit = \(mermaidThemeJSON);"
-                )
-            }
+            htmlToLoad = injectTheme(htmlToLoad)
             // Save scroll position before reload, restore in didFinish
             webView.evaluateJavaScript("window.scrollY") { result, _ in
                 coord.savedScrollY = result as? Double ?? 0
@@ -132,12 +123,7 @@ struct MarkdownWebView: NSViewRepresentable {
             if coord.pageLoaded {
                 coord.pageLoaded = false
                 var htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
-                if !mermaidThemeJSON.isEmpty {
-                    htmlToLoad = htmlToLoad.replacingOccurrences(
-                        of: "var _mermaidCustomInit = null;",
-                        with: "var _mermaidCustomInit = \(mermaidThemeJSON);"
-                    )
-                }
+                htmlToLoad = injectTheme(htmlToLoad)
                 webView.evaluateJavaScript("window.scrollY") { result, _ in
                     coord.savedScrollY = result as? Double ?? 0
                     webView.loadHTMLString(htmlToLoad, baseURL: nil)
@@ -151,6 +137,23 @@ struct MarkdownWebView: NSViewRepresentable {
                 webView.evaluateJavaScript("setContentWidth(\(Int(contentWidth)))") { _, _ in }
             }
         }
+    }
+
+    private func injectTheme(_ html: String) -> String {
+        var result = html
+        if !mermaidThemeJSON.isEmpty {
+            result = result.replacingOccurrences(
+                of: "var _mermaidCustomInit = null;",
+                with: "var _mermaidCustomInit = \(mermaidThemeJSON);"
+            )
+        }
+        if !themeCSS.isEmpty {
+            result = result.replacingOccurrences(
+                of: "<style id=\"theme-css\"></style>",
+                with: "<style id=\"theme-css\">\(themeCSS)</style>"
+            )
+        }
+        return result
     }
 
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {

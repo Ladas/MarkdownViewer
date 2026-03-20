@@ -3,7 +3,8 @@ import Foundation
 public struct MermaidTheme: Identifiable, Hashable {
     public let id: String
     public let name: String
-    public let initJSON: String // JSON string for mermaid.initialize config
+    public let initJSON: String
+    public let css: String
 
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
     public static func == (lhs: MermaidTheme, rhs: MermaidTheme) -> Bool { lhs.id == rhs.id }
@@ -11,13 +12,12 @@ public struct MermaidTheme: Identifiable, Hashable {
 
 public enum MermaidThemeManager {
 
-    // Built-in mermaid themes
     private static let builtinThemes: [MermaidTheme] = [
-        MermaidTheme(id: "auto", name: "Auto (Light/Dark)", initJSON: ""),
-        MermaidTheme(id: "default", name: "Default", initJSON: "{\"theme\":\"default\"}"),
-        MermaidTheme(id: "dark", name: "Dark", initJSON: "{\"theme\":\"dark\"}"),
-        MermaidTheme(id: "forest", name: "Forest", initJSON: "{\"theme\":\"forest\"}"),
-        MermaidTheme(id: "neutral", name: "Neutral", initJSON: "{\"theme\":\"neutral\"}"),
+        MermaidTheme(id: "auto", name: "Auto (Light/Dark)", initJSON: "", css: ""),
+        MermaidTheme(id: "default", name: "Default", initJSON: "{\"theme\":\"default\"}", css: ""),
+        MermaidTheme(id: "dark", name: "Dark", initJSON: "{\"theme\":\"dark\"}", css: ""),
+        MermaidTheme(id: "forest", name: "Forest", initJSON: "{\"theme\":\"forest\"}", css: ""),
+        MermaidTheme(id: "neutral", name: "Neutral", initJSON: "{\"theme\":\"neutral\"}", css: ""),
     ]
 
     public static func loadThemes() -> [MermaidTheme] {
@@ -27,7 +27,6 @@ public enum MermaidThemeManager {
     }
 
     private static func loadPluginThemes() -> [MermaidTheme] {
-        // Look for theme JSON files in Resources/themes/ (gitignored)
         guard let themesDir = Bundle.module.url(
             forResource: "themes", withExtension: nil, subdirectory: "Resources"
         ) else { return [] }
@@ -43,12 +42,12 @@ public enum MermaidThemeManager {
                   let name = json["name"] as? String,
                   let mermaidInit = json["mermaidInit"] as? [String: Any] else { return nil }
 
-            // Re-serialize the mermaidInit to a clean JSON string
             guard let initData = try? JSONSerialization.data(withJSONObject: mermaidInit),
                   let initString = String(data: initData, encoding: .utf8) else { return nil }
 
+            let css = json["css"] as? String ?? ""
             let id = url.deletingPathExtension().lastPathComponent
-            return MermaidTheme(id: "plugin-\(id)", name: name, initJSON: initString)
+            return MermaidTheme(id: "plugin-\(id)", name: name, initJSON: initString, css: css)
         }
     }
 }
