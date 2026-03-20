@@ -267,15 +267,16 @@ struct MarkdownWebView: NSViewRepresentable {
             guard let dataUrl = message.body as? String,
                   let commaIndex = dataUrl.firstIndex(of: ",") else { return }
             let base64 = String(dataUrl[dataUrl.index(after: commaIndex)...])
-            guard let data = Data(base64Encoded: base64) else { return }
+            guard let imageData = Data(base64Encoded: base64) else { return }
 
             DispatchQueue.main.async {
                 let panel = NSSavePanel()
-                panel.allowedContentTypes = [.png]
+                panel.allowedContentTypes = [UTType.png]
+                panel.canCreateDirectories = true
                 panel.nameFieldStringValue = "diagram.png"
-                panel.begin { response in
-                    guard response == .OK, let url = panel.url else { return }
-                    try? data.write(to: url)
+                let response = panel.runModal()
+                if response == .OK, let url = panel.url {
+                    try? imageData.write(to: url)
                 }
             }
         }
