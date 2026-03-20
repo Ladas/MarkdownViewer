@@ -564,4 +564,182 @@ flowchart TD
 
 ---
 
-*Showcase covers: 13 mermaid diagram types (flowchart, subgraphs, sequence, state, class, ER, gantt, pie, mindmap, xychart, journey, quadrant, timeline) + 4 animated SVGs (neural network, orbital swarm, heartbeat monitor, data waterfall) + complex patterns (C4, decision tree).*
+### 2.5 Particle System — Emergent Intelligence
+
+<svg width="600" height="350" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @media (prefers-color-scheme: dark) { .ps-bg{fill:#0d1117} .ps-t{fill:#8b949e} .ps-p1{fill:#1f6feb} .ps-p2{fill:#3fb950} .ps-p3{fill:#f9a825} .ps-p4{fill:#a371f7} .ps-p5{fill:#da3633} .ps-glow{fill:#1f6feb} .ps-ring{stroke:#30363d} }
+    @media (prefers-color-scheme: light) { .ps-bg{fill:#f8f9fa} .ps-t{fill:#57606a} .ps-p1{fill:#0969da} .ps-p2{fill:#1a7f37} .ps-p3{fill:#bf8700} .ps-p4{fill:#8250df} .ps-p5{fill:#cf222e} .ps-glow{fill:#0969da} .ps-ring{stroke:#d0d7de} }
+  </style>
+  <rect class="ps-bg" width="600" height="350" rx="10"/>
+  <text class="ps-t" x="300" y="22" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600">Emergent Intelligence — Particle Convergence</text>
+  <!-- Central attractor glow -->
+  <circle class="ps-glow" cx="300" cy="185" r="50" opacity="0.04">
+    <animate attributeName="r" values="50;80;50" dur="4s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.04;0.08;0.04" dur="4s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="ps-glow" cx="300" cy="185" r="30" opacity="0.08">
+    <animate attributeName="r" values="30;45;30" dur="3s" repeatCount="indefinite"/>
+  </circle>
+  <!-- Convergence rings -->
+  <circle class="ps-ring" cx="300" cy="185" r="80" fill="none" stroke-width="0.5" opacity="0.3"/>
+  <circle class="ps-ring" cx="300" cy="185" r="130" fill="none" stroke-width="0.5" opacity="0.2"/>
+  <!-- Orbiting particles — inner ring (fast, small) -->
+  <circle class="ps-p1" r="4"><animateMotion dur="3s" repeatCount="indefinite" path="M300,185 m-40,0 a40,30 0 1,1 80,0 a40,30 0 1,1 -80,0"/></circle>
+  <circle class="ps-p2" r="4"><animateMotion dur="3s" begin="1s" repeatCount="indefinite" path="M300,185 m-40,0 a40,30 0 1,1 80,0 a40,30 0 1,1 -80,0"/></circle>
+  <circle class="ps-p3" r="4"><animateMotion dur="3s" begin="2s" repeatCount="indefinite" path="M300,185 m-40,0 a40,30 0 1,1 80,0 a40,30 0 1,1 -80,0"/></circle>
+  <!-- Middle ring — tilted ellipse -->
+  <circle class="ps-p4" r="5"><animateMotion dur="5s" repeatCount="indefinite" path="M300,185 m0,-80 a80,80 0 1,1 0,160 a80,80 0 1,1 0,-160"/></circle>
+  <circle class="ps-p5" r="5"><animateMotion dur="5s" begin="1.67s" repeatCount="indefinite" path="M300,185 m0,-80 a80,80 0 1,1 0,160 a80,80 0 1,1 0,-160"/></circle>
+  <circle class="ps-p1" r="5"><animateMotion dur="5s" begin="3.33s" repeatCount="indefinite" path="M300,185 m0,-80 a80,80 0 1,1 0,160 a80,80 0 1,1 0,-160"/></circle>
+  <!-- Outer ring — slow, large -->
+  <circle class="ps-p3" r="3"><animateMotion dur="8s" repeatCount="indefinite" path="M300,185 m-130,0 a130,100 0 1,1 260,0 a130,100 0 1,1 -260,0"/></circle>
+  <circle class="ps-p2" r="3"><animateMotion dur="8s" begin="2s" repeatCount="indefinite" path="M300,185 m-130,0 a130,100 0 1,1 260,0 a130,100 0 1,1 -260,0"/></circle>
+  <circle class="ps-p4" r="3"><animateMotion dur="8s" begin="4s" repeatCount="indefinite" path="M300,185 m-130,0 a130,100 0 1,1 260,0 a130,100 0 1,1 -260,0"/></circle>
+  <circle class="ps-p5" r="3"><animateMotion dur="8s" begin="6s" repeatCount="indefinite" path="M300,185 m-130,0 a130,100 0 1,1 260,0 a130,100 0 1,1 -260,0"/></circle>
+  <!-- Sparks flying inward -->
+  <circle class="ps-p1" r="2" opacity="0.8">
+    <animateMotion dur="2s" repeatCount="indefinite" path="M120,60 Q200,120 300,185"/>
+    <animate attributeName="opacity" values="0.8;0;0.8" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="ps-p5" r="2" opacity="0.8">
+    <animateMotion dur="2.5s" begin="0.5s" repeatCount="indefinite" path="M500,80 Q400,140 300,185"/>
+    <animate attributeName="opacity" values="0.8;0;0.8" dur="2.5s" begin="0.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="ps-p3" r="2" opacity="0.8">
+    <animateMotion dur="2.2s" begin="1s" repeatCount="indefinite" path="M80,280 Q180,230 300,185"/>
+    <animate attributeName="opacity" values="0.8;0;0.8" dur="2.2s" begin="1s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="ps-p4" r="2" opacity="0.8">
+    <animateMotion dur="2.8s" begin="1.5s" repeatCount="indefinite" path="M520,300 Q420,240 300,185"/>
+    <animate attributeName="opacity" values="0.8;0;0.8" dur="2.8s" begin="1.5s" repeatCount="indefinite"/>
+  </circle>
+  <!-- Center core -->
+  <circle class="ps-glow" cx="300" cy="185" r="8"/>
+  <text class="ps-t" x="300" y="335" text-anchor="middle" font-family="system-ui" font-size="10">Agents converge on emergent intelligence through self-organization</text>
+</svg>
+
+### 2.6 Brain Neuron Zoom — Synaptic Firing
+
+<svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @media (prefers-color-scheme: dark) { .br-bg{fill:#0d1117} .br-t{fill:#8b949e} .br-soma{fill:#1f6feb} .br-axon{stroke:#30363d} .br-syn{fill:#3fb950} .br-signal{fill:#f0883e} .br-dend{stroke:#484f58} .br-glow{fill:#1f6feb} }
+    @media (prefers-color-scheme: light) { .br-bg{fill:#fefefe} .br-t{fill:#57606a} .br-soma{fill:#0969da} .br-axon{stroke:#afb8c1} .br-syn{fill:#1a7f37} .br-signal{fill:#cf222e} .br-dend{stroke:#d0d7de} .br-glow{fill:#0969da} }
+  </style>
+  <rect class="br-bg" width="600" height="400" rx="10"/>
+  <text class="br-t" x="300" y="22" text-anchor="middle" font-family="system-ui" font-size="13" font-weight="600">Neuron — Synaptic Signal Transmission</text>
+  <!-- Dendrites (input branches) -->
+  <path class="br-dend" d="M80,120 Q120,140 160,160" fill="none" stroke-width="3" stroke-linecap="round"/>
+  <path class="br-dend" d="M60,180 Q110,180 160,180" fill="none" stroke-width="2.5" stroke-linecap="round"/>
+  <path class="br-dend" d="M80,250 Q120,230 160,210" fill="none" stroke-width="2" stroke-linecap="round"/>
+  <path class="br-dend" d="M100,100 Q140,130 170,155" fill="none" stroke-width="1.5" stroke-linecap="round"/>
+  <path class="br-dend" d="M70,290 Q130,260 160,220" fill="none" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Dendrite tips (synapses) -->
+  <circle class="br-syn" cx="80" cy="120" r="5"><animate attributeName="r" values="5;8;5" dur="1.8s" repeatCount="indefinite"/></circle>
+  <circle class="br-syn" cx="60" cy="180" r="5"><animate attributeName="r" values="5;8;5" dur="1.8s" begin="0.4s" repeatCount="indefinite"/></circle>
+  <circle class="br-syn" cx="80" cy="250" r="5"><animate attributeName="r" values="5;8;5" dur="1.8s" begin="0.8s" repeatCount="indefinite"/></circle>
+  <circle class="br-syn" cx="100" cy="100" r="4"><animate attributeName="r" values="4;7;4" dur="1.8s" begin="1.2s" repeatCount="indefinite"/></circle>
+  <circle class="br-syn" cx="70" cy="290" r="4"><animate attributeName="r" values="4;7;4" dur="1.8s" begin="0.2s" repeatCount="indefinite"/></circle>
+  <!-- Cell body (soma) -->
+  <circle class="br-glow" cx="190" cy="190" r="50" opacity="0.06">
+    <animate attributeName="r" values="50;65;50" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="br-soma" cx="190" cy="190" r="35"/>
+  <text x="190" y="185" text-anchor="middle" fill="white" font-family="system-ui" font-size="10" font-weight="600">Soma</text>
+  <text x="190" y="198" text-anchor="middle" fill="white" font-family="system-ui" font-size="8" opacity="0.8">Cell Body</text>
+  <!-- Axon (long output) -->
+  <path class="br-axon" d="M225,190 Q280,190 320,180 Q360,170 400,175 Q440,180 470,190" fill="none" stroke-width="6" stroke-linecap="round"/>
+  <!-- Myelin sheaths -->
+  <rect class="br-soma" x="260" y="177" width="35" height="16" rx="8" opacity="0.4"/>
+  <rect class="br-soma" x="320" y="170" width="35" height="16" rx="8" opacity="0.4"/>
+  <rect class="br-soma" x="380" y="173" width="35" height="16" rx="8" opacity="0.4"/>
+  <!-- Axon terminal branches -->
+  <path class="br-axon" d="M470,190 Q490,170 510,155" fill="none" stroke-width="3" stroke-linecap="round"/>
+  <path class="br-axon" d="M470,190 Q495,190 520,190" fill="none" stroke-width="3" stroke-linecap="round"/>
+  <path class="br-axon" d="M470,190 Q490,210 510,225" fill="none" stroke-width="3" stroke-linecap="round"/>
+  <!-- Terminal boutons -->
+  <circle class="br-signal" cx="510" cy="155" r="7">
+    <animate attributeName="r" values="7;10;7" dur="1.5s" begin="1s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="1;0.6;1" dur="1.5s" begin="1s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="br-signal" cx="520" cy="190" r="7">
+    <animate attributeName="r" values="7;10;7" dur="1.5s" begin="1.2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="1;0.6;1" dur="1.5s" begin="1.2s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="br-signal" cx="510" cy="225" r="7">
+    <animate attributeName="r" values="7;10;7" dur="1.5s" begin="1.4s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="1;0.6;1" dur="1.5s" begin="1.4s" repeatCount="indefinite"/>
+  </circle>
+  <!-- Action potential signal traveling along axon -->
+  <circle class="br-signal" r="5" opacity="0.9">
+    <animateMotion dur="1.5s" repeatCount="indefinite" path="M225,190 Q280,190 320,180 Q360,170 400,175 Q440,180 470,190"/>
+    <animate attributeName="r" values="5;8;5" dur="1.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="br-signal" r="5" opacity="0.9">
+    <animateMotion dur="1.5s" begin="0.5s" repeatCount="indefinite" path="M225,190 Q280,190 320,180 Q360,170 400,175 Q440,180 470,190"/>
+    <animate attributeName="r" values="5;8;5" dur="1.5s" begin="0.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="br-signal" r="5" opacity="0.9">
+    <animateMotion dur="1.5s" begin="1s" repeatCount="indefinite" path="M225,190 Q280,190 320,180 Q360,170 400,175 Q440,180 470,190"/>
+    <animate attributeName="r" values="5;8;5" dur="1.5s" begin="1s" repeatCount="indefinite"/>
+  </circle>
+  <!-- Input signals arriving at dendrites -->
+  <circle class="br-syn" r="3"><animateMotion dur="1s" repeatCount="indefinite" path="M80,120 Q120,140 160,160"/></circle>
+  <circle class="br-syn" r="3"><animateMotion dur="1s" begin="0.3s" repeatCount="indefinite" path="M60,180 Q110,180 160,180"/></circle>
+  <circle class="br-syn" r="3"><animateMotion dur="1s" begin="0.6s" repeatCount="indefinite" path="M80,250 Q120,230 160,210"/></circle>
+  <!-- Labels -->
+  <text class="br-t" x="75" y="85" font-family="system-ui" font-size="10" font-weight="600">Dendrites</text>
+  <text class="br-t" x="75" y="97" font-family="system-ui" font-size="8">(input signals)</text>
+  <text class="br-t" x="330" y="155" font-family="system-ui" font-size="10" font-weight="600">Axon</text>
+  <text class="br-t" x="330" y="167" font-family="system-ui" font-size="8">(with myelin sheaths)</text>
+  <text class="br-t" x="505" y="130" font-family="system-ui" font-size="10" font-weight="600">Terminals</text>
+  <text class="br-t" x="505" y="142" font-family="system-ui" font-size="8">(output synapses)</text>
+  <text class="br-t" x="300" y="340" text-anchor="middle" font-family="system-ui" font-size="10">Action potentials propagate from dendrites through soma along axon to terminals</text>
+  <text class="br-t" x="300" y="360" text-anchor="middle" font-family="system-ui" font-size="9" opacity="0.7">Each neuron is an "agent" — intelligence emerges from billions coordinating</text>
+</svg>
+
+### 2.7 Spinning DNA Helix
+
+<svg width="300" height="400" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @media (prefers-color-scheme: dark) { .dna-bg{fill:#0d1117} .dna-t{fill:#8b949e} .dna-s1{fill:#1f6feb} .dna-s2{fill:#da3633} .dna-bond{stroke:#30363d} }
+    @media (prefers-color-scheme: light) { .dna-bg{fill:#f8f9fa} .dna-t{fill:#57606a} .dna-s1{fill:#0969da} .dna-s2{fill:#cf222e} .dna-bond{stroke:#d0d7de} }
+  </style>
+  <rect class="dna-bg" width="300" height="400" rx="10"/>
+  <text class="dna-t" x="150" y="22" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600">Agent DNA — Code Blueprint</text>
+  <!-- Backbone strands with animation -->
+  <g>
+    <!-- Left strand nodes -->
+    <circle class="dna-s1" cx="100" cy="60" r="6"><animate attributeName="cx" values="100;200;100" dur="4s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s1" cx="120" cy="100" r="6"><animate attributeName="cx" values="120;180;120" dur="4s" begin="0.3s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s1" cx="190" cy="140" r="6"><animate attributeName="cx" values="190;110;190" dur="4s" begin="0.6s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s1" cx="200" cy="180" r="6"><animate attributeName="cx" values="200;100;200" dur="4s" begin="0.9s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s1" cx="180" cy="220" r="6"><animate attributeName="cx" values="180;120;180" dur="4s" begin="1.2s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s1" cx="110" cy="260" r="6"><animate attributeName="cx" values="110;190;110" dur="4s" begin="1.5s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s1" cx="100" cy="300" r="6"><animate attributeName="cx" values="100;200;100" dur="4s" begin="1.8s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s1" cx="140" cy="340" r="6"><animate attributeName="cx" values="140;160;140" dur="4s" begin="2.1s" repeatCount="indefinite"/></circle>
+    <!-- Right strand nodes -->
+    <circle class="dna-s2" cx="200" cy="60" r="6"><animate attributeName="cx" values="200;100;200" dur="4s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s2" cx="180" cy="100" r="6"><animate attributeName="cx" values="180;120;180" dur="4s" begin="0.3s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s2" cx="110" cy="140" r="6"><animate attributeName="cx" values="110;190;110" dur="4s" begin="0.6s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s2" cx="100" cy="180" r="6"><animate attributeName="cx" values="100;200;100" dur="4s" begin="0.9s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s2" cx="120" cy="220" r="6"><animate attributeName="cx" values="120;180;120" dur="4s" begin="1.2s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s2" cx="190" cy="260" r="6"><animate attributeName="cx" values="190;110;190" dur="4s" begin="1.5s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s2" cx="200" cy="300" r="6"><animate attributeName="cx" values="200;100;200" dur="4s" begin="1.8s" repeatCount="indefinite"/></circle>
+    <circle class="dna-s2" cx="160" cy="340" r="6"><animate attributeName="cx" values="160;140;160" dur="4s" begin="2.1s" repeatCount="indefinite"/></circle>
+    <!-- Hydrogen bonds -->
+    <line class="dna-bond" x1="100" y1="60" x2="200" y2="60" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <line class="dna-bond" x1="120" y1="100" x2="180" y2="100" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <line class="dna-bond" x1="190" y1="140" x2="110" y2="140" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <line class="dna-bond" x1="200" y1="180" x2="100" y2="180" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <line class="dna-bond" x1="180" y1="220" x2="120" y2="220" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <line class="dna-bond" x1="110" y1="260" x2="190" y2="260" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <line class="dna-bond" x1="100" y1="300" x2="200" y2="300" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <line class="dna-bond" x1="140" y1="340" x2="160" y2="340" stroke-width="1.5" stroke-dasharray="4,3"/>
+  </g>
+  <text class="dna-t" x="150" y="385" text-anchor="middle" font-family="system-ui" font-size="9">Agent genome — each base pair encodes a capability</text>
+</svg>
+
+---
+
+*Showcase: 13 mermaid types + 7 animated SVGs (neural network, orbital swarm, heartbeat, waterfall, particle convergence, brain neuron, DNA helix) + complex patterns.*
