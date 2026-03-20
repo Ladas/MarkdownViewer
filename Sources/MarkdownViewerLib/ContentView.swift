@@ -263,7 +263,9 @@ public struct ContentView: View {
                     navigationTrigger: navigationTrigger,
                     navigationForward: navigationForward,
                     copyRenderedTrigger: copyRenderedTrigger,
+                    copyHTMLMode: appearanceMode,
                     exportHTMLTrigger: exportHTMLTrigger,
+                    exportHTMLMode: appearanceMode,
                     zoomLevel: zoomLevel,
                     scrollToHeadingTrigger: scrollToHeadingTrigger,
                     scrollToHeadingIndex: scrollToHeadingIndex,
@@ -572,6 +574,13 @@ public struct ContentView: View {
                 }
                 .help("Open chat with review note instructions — edit before sending")
             }
+            Button(action: cycleAppearance) {
+                Image(systemName: appearanceIcon)
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Appearance: \(appearanceMode) (affects preview and copy)")
             actionButton("MD", icon: "doc.on.doc") { copySource() }
                 .help("Copy raw markdown source to clipboard (Cmd+Shift+C)")
             actionButton("HTML", icon: "doc.richtext") { copyRendered() }
@@ -955,6 +964,22 @@ public struct ContentView: View {
         if !showSearch { showSearch = true; isSearchFocused = true; return }
         navigationForward = false
         navigationTrigger += 1
+    }
+
+    private var appearanceIcon: String {
+        switch appearanceMode {
+        case "light": return "sun.max.fill"
+        case "dark": return "moon.fill"
+        default: return "circle.lefthalf.filled"
+        }
+    }
+
+    private func cycleAppearance() {
+        switch appearanceMode {
+        case "auto": appearanceMode = "light"
+        case "light": appearanceMode = "dark"
+        default: appearanceMode = "auto"
+        }
     }
 
     private func copySource() {
