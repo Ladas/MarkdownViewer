@@ -463,16 +463,22 @@
                 var text = th.textContent;
                 var td = document.createElement('td');
                 td.setAttribute('bgcolor', headerBg);
-                td.style.cssText = cellBorder + ';background-color:' + headerBg;
+                td.style.cssText = cellBorder + ';background-color:' + headerBg + ';text-align:left';
                 td.innerHTML = '<b><font color="' + headerColor + '">' + escapeHtml(text) + '</font></b>';
                 th.parentNode.replaceChild(td, th);
             });
 
-            var allTds = clone.querySelectorAll('td');
-            for (var ci = 0; ci < allTds.length; ci++) {
-                var td = allTds[ci];
-                if (td.style.cssText && td.style.cssText.indexOf('border-left') !== -1) continue;
-                td.style.cssText = cellBorder;
+            // Regular cells with alternating row colors
+            var allRows = clone.querySelectorAll('tr');
+            for (var ri = 0; ri < allRows.length; ri++) {
+                var cells = allRows[ri].querySelectorAll('td');
+                for (var ci = 0; ci < cells.length; ci++) {
+                    var td = cells[ci];
+                    if (td.style.cssText && td.style.cssText.indexOf('border-left') !== -1) continue;
+                    var rowBg = (ri % 2 === 1) ? '#f6f8fa' : '#ffffff';
+                    td.setAttribute('bgcolor', rowBg);
+                    td.style.cssText = cellBorder + ';text-align:left;background-color:' + rowBg;
+                }
             }
 
             clone.querySelectorAll('img').forEach(function(img) {
