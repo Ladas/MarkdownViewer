@@ -25,18 +25,20 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
         return nil
     }
 
-    /// JSON response from `claude -p --output-format json`
+    /// Response from claude CLI
     public struct CLIResponse {
         public let result: String
         public let sessionId: String?
     }
 
-    /// Run claude CLI with a prompt using JSON output format.
-    /// Returns the full response and session ID for --resume support.
+    /// Run claude CLI with streaming JSON output.
+    /// `onOutput` is called with incremental text as it arrives.
+    /// `onComplete` is called with the full response and session ID.
     public func run(
         prompt: String,
         allowEditing: Bool = false,
         sessionId: String? = nil,
+        model: String = "claude-sonnet-4-6",
         onOutput: @escaping @Sendable (String) -> Void,
         onComplete: @escaping @Sendable (CLIResponse, Int32) -> Void
     ) {
@@ -44,14 +46,13 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
 
         let escapedPrompt = prompt
             .replacingOccurrences(of: "'", with: "'\\''")
-        var claudeCmd = "claude -p '\(escapedPrompt)' --output-format json --model claude-sonnet-4-6"
+        var claudeCmd = "claude -p '\(escapedPrompt)' --output-format stream-json --verbose --model \(model)"
         if let sid = sessionId {
             claudeCmd += " --resume '\(sid)'"
         }
         if allowEditing {
             claudeCmd += " --dangerously-skip-permissions"
         } else {
-            // Block write tools when editing is disabled
             claudeCmd += " --disallowedTools Edit Write Bash NotebookEdit"
         }
 
@@ -72,8 +73,11 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
 
         self.process = process
 
-        // Accumulate all stdout data for JSON parsing
-        var stdoutData = Data()
+        // Buffer for incomplete lines (stream-json is newline-delimited)
+        var lineBuffer = ""
+        var resultText = ""
+        var resultSessionId: String?
+
         let outHandle = stdoutPipe.fileHandleForReading
         outHandle.readabilityHandler = { handle in
             let data = handle.availableData
@@ -81,11 +85,44 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
                 outHandle.readabilityHandler = nil
                 return
             }
-            stdoutData.append(data)
-            // Also stream raw chunks for a "thinking" indicator
-            if let str = String(data: data, encoding: .utf8) {
-                DispatchQueue.main.async {
-                    onOutput(str)
+            guard let chunk = String(data: data, encoding: .utf8) else { return }
+            lineBuffer += chunk
+
+            // Process complete lines
+            while let newlineIndex = lineBuffer.firstIndex(of: "\n") {
+                let line = String(lineBuffer[lineBuffer.startIndex..<newlineIndex])
+                lineBuffer = String(lineBuffer[lineBuffer.index(after: newlineIndex)...])
+
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty,
+                      let lineData = trimmed.data(using: .utf8),
+                      let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
+                    continue
+                }
+
+                let type = json["type"] as? String ?? ""
+
+                switch type {
+                case "content_block_delta":
+                    // Extract streamed text delta
+                    if let delta = json["delta"] as? [String: Any],
+                       let text = delta["text"] as? String {
+                        resultText += text
+                        DispatchQueue.main.async {
+                            onOutput(text)
+                        }
+                    }
+                case "result":
+                    // Final result with session_id
+                    if let result = json["result"] as? String {
+                        resultText = result
+                    }
+                    resultSessionId = json["session_id"] as? String
+                case "message_start":
+                    // Message started — could show thinking indicator
+                    break
+                default:
+                    break
                 }
             }
         }
@@ -105,9 +142,34 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
         process.terminationHandler = { proc in
             outHandle.readabilityHandler = nil
             errHandle.readabilityHandler = nil
+
+            // Process any remaining buffered data
+            let remaining = lineBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !remaining.isEmpty,
+               let lineData = remaining.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] {
+                if let result = json["result"] as? String {
+                    resultText = result
+                }
+                if let sid = json["session_id"] as? String {
+                    resultSessionId = sid
+                }
+            }
+
             DispatchQueue.main.async {
-                let response = Self.parseResponse(stdout: stdoutData, stderr: stderrData)
-                onComplete(response, proc.terminationStatus)
+                if resultText.isEmpty {
+                    // Fallback: check stderr for errors
+                    let errText = String(data: stderrData, encoding: .utf8)?
+                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let response = CLIResponse(
+                        result: errText.isEmpty ? "" : "Error: \(errText)",
+                        sessionId: resultSessionId
+                    )
+                    onComplete(response, proc.terminationStatus)
+                } else {
+                    let response = CLIResponse(result: resultText, sessionId: resultSessionId)
+                    onComplete(response, proc.terminationStatus)
+                }
             }
         }
 
@@ -117,36 +179,6 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
             let errorResponse = CLIResponse(result: "Error: Failed to launch shell: \(error.localizedDescription)", sessionId: nil)
             onComplete(errorResponse, 1)
         }
-    }
-
-    /// Parse the JSON response from claude CLI
-    private static func parseResponse(stdout: Data, stderr: Data) -> CLIResponse {
-        // Try parsing stdout as JSON first
-        if let response = parseJSON(stdout) {
-            return response
-        }
-        // Claude also outputs JSON to stderr with --output-format json
-        if let response = parseJSON(stderr) {
-            return response
-        }
-        // Fallback: treat stdout as plain text
-        let text = String(data: stdout, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if text.isEmpty {
-            let errText = String(data: stderr, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return CLIResponse(result: errText.isEmpty ? "" : "Error: \(errText)", sessionId: nil)
-        }
-        return CLIResponse(result: text, sessionId: nil)
-    }
-
-    private static func parseJSON(_ data: Data) -> CLIResponse? {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-        let result = json["result"] as? String ?? ""
-        let sessionId = json["session_id"] as? String
-        return CLIResponse(result: result, sessionId: sessionId)
     }
 
     public func cancel() {

@@ -142,6 +142,22 @@ struct ChatPanelView: View {
     @State private var gitRoot: URL?
     @State private var sessionIdsByDir: [String: String] = [:]
     @State private var allowEditing = true
+    @State private var selectedModel = "sonnet"
+    @State private var availableModels: [ModelOption] = ModelOption.defaults
+
+    struct ModelOption: Identifiable {
+        let id: String
+        let label: String
+
+        static let defaults: [ModelOption] = [
+            ModelOption(id: "sonnet", label: "Sonnet"),
+            ModelOption(id: "opus", label: "Opus"),
+            ModelOption(id: "haiku", label: "Haiku"),
+            ModelOption(id: "custom", label: "Custom..."),
+        ]
+    }
+    @State private var showCustomModelInput = false
+    @State private var customModelId = ""
     @FocusState private var isInputFocused: Bool
 
     var body: some View {
@@ -153,6 +169,48 @@ struct ChatPanelView: View {
                 Text("Claude Chat")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
+
+                Picker("", selection: $selectedModel) {
+                    ForEach(availableModels, id: \.id) { model in
+                        Text(model.label).tag(model.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                .controlSize(.mini)
+                .frame(width: 100)
+                .onChange(of: selectedModel) { newValue in
+                    if newValue == "custom" {
+                        showCustomModelInput = true
+                    }
+                }
+                .popover(isPresented: $showCustomModelInput) {
+                    VStack(spacing: 8) {
+                        Text("Enter model ID")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("e.g. claude-sonnet-4-6", text: $customModelId)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11))
+                            .frame(width: 200)
+                            .onSubmit {
+                                applyCustomModel()
+                            }
+                        HStack {
+                            Button("Cancel") {
+                                showCustomModelInput = false
+                                selectedModel = "sonnet"
+                            }
+                            .controlSize(.small)
+                            Spacer()
+                            Button("Apply") {
+                                applyCustomModel()
+                            }
+                            .controlSize(.small)
+                            .disabled(customModelId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    }
+                    .padding(12)
+                }
 
                 Spacer()
 
@@ -300,6 +358,19 @@ struct ChatPanelView: View {
         }
     }
 
+    private func applyCustomModel() {
+        let id = customModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !id.isEmpty else { return }
+        // Add to list if not already there
+        if !availableModels.contains(where: { $0.id == id }) {
+            // Insert before "Custom..."
+            let insertIndex = availableModels.count - 1
+            availableModels.insert(ModelOption(id: id, label: id), at: insertIndex)
+        }
+        selectedModel = id
+        showCustomModelInput = false
+    }
+
     private var displayPath: String {
         if let root = gitRoot {
             return root.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
@@ -381,10 +452,10 @@ struct ChatPanelView: View {
             prompt: buildPrompt(prompt),
             allowEditing: allowEditing,
             sessionId: historyManager?.sessionId,
-            onOutput: { [self] chunk in
+            model: selectedModel,
+            onOutput: { [self] textDelta in
                 MainActor.assumeIsolated {
-                    // Show raw chunks as streaming indicator while waiting for JSON
-                    streamingResponse += chunk
+                    streamingResponse += textDelta
                 }
             },
             onComplete: { [self] response, _ in
@@ -415,6 +486,7 @@ struct ChatPanelView: View {
                             prompt: buildPrompt(prompt),
                             allowEditing: allowEditing,
                             sessionId: nil,
+                            model: selectedModel,
                             onOutput: { [self] chunk in
                                 MainActor.assumeIsolated { streamingResponse += chunk }
                             },
