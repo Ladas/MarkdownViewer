@@ -507,18 +507,18 @@ timeline
 
 ```mermaid
 flowchart TB
-    User["fa:fa-user Developer"]
-    MV["fa:fa-eye MarkdownViewer\n(macOS App)"]
-    Claude["fa:fa-robot Claude Code\n(CLI)"]
-    Git["fa:fa-code-branch Git\n(Version Control)"]
-    GDocs["fa:fa-file-alt Google Docs\n(Sharing)"]
+    User["Developer"]
+    MV["MarkdownViewer"]
+    Claude["Claude Code"]
+    Git["Git"]
+    GDocs["Google Docs"]
 
-    User -->|Opens .md files| MV
+    User -->|Opens files| MV
     User -->|Writes code| Claude
     Claude -->|Generates docs| Git
     MV -->|Review notes| Git
     MV -->|Copy HTML| GDocs
-    Claude -->|Reads review notes| Git
+    Claude -->|Reads notes| Git
     User -->|Shares| GDocs
 
     style MV fill:#1565c0,color:#fff,stroke:#42a5f5
@@ -698,46 +698,45 @@ flowchart TD
   <text class="br-t" x="300" y="360" text-anchor="middle" font-family="system-ui" font-size="9" opacity="0.7">Each neuron is an "agent" — intelligence emerges from billions coordinating</text>
 </svg>
 
-### 2.7 Spinning DNA Helix
+### 2.7 Galaxy Spiral — Agent Ecosystem
 
-<svg width="300" height="400" xmlns="http://www.w3.org/2000/svg">
+<svg width="500" height="500" xmlns="http://www.w3.org/2000/svg">
   <style>
-    @media (prefers-color-scheme: dark) { .dna-bg{fill:#0d1117} .dna-t{fill:#8b949e} .dna-s1{fill:#1f6feb} .dna-s2{fill:#da3633} .dna-bond{stroke:#30363d} }
-    @media (prefers-color-scheme: light) { .dna-bg{fill:#f8f9fa} .dna-t{fill:#57606a} .dna-s1{fill:#0969da} .dna-s2{fill:#cf222e} .dna-bond{stroke:#d0d7de} }
+    @media (prefers-color-scheme: dark) { .gx-bg{fill:#0a0c10} .gx-t{fill:#7d8590} .gx-core{fill:#f0883e} .gx-s1{fill:#79c0ff} .gx-s2{fill:#7ee787} .gx-s3{fill:#d2a8ff} .gx-s4{fill:#ff7b72} .gx-dust{fill:#21262d} }
+    @media (prefers-color-scheme: light) { .gx-bg{fill:#f0f3f6} .gx-t{fill:#57606a} .gx-core{fill:#bf8700} .gx-s1{fill:#0969da} .gx-s2{fill:#1a7f37} .gx-s3{fill:#8250df} .gx-s4{fill:#cf222e} .gx-dust{fill:#eaeef2} }
   </style>
-  <rect class="dna-bg" width="300" height="400" rx="10"/>
-  <text class="dna-t" x="150" y="22" text-anchor="middle" font-family="system-ui" font-size="12" font-weight="600">Agent DNA — Code Blueprint</text>
-  <!-- Backbone strands with animation -->
-  <g>
-    <!-- Left strand nodes -->
-    <circle class="dna-s1" cx="100" cy="60" r="6"><animate attributeName="cx" values="100;200;100" dur="4s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s1" cx="120" cy="100" r="6"><animate attributeName="cx" values="120;180;120" dur="4s" begin="0.3s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s1" cx="190" cy="140" r="6"><animate attributeName="cx" values="190;110;190" dur="4s" begin="0.6s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s1" cx="200" cy="180" r="6"><animate attributeName="cx" values="200;100;200" dur="4s" begin="0.9s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s1" cx="180" cy="220" r="6"><animate attributeName="cx" values="180;120;180" dur="4s" begin="1.2s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s1" cx="110" cy="260" r="6"><animate attributeName="cx" values="110;190;110" dur="4s" begin="1.5s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s1" cx="100" cy="300" r="6"><animate attributeName="cx" values="100;200;100" dur="4s" begin="1.8s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s1" cx="140" cy="340" r="6"><animate attributeName="cx" values="140;160;140" dur="4s" begin="2.1s" repeatCount="indefinite"/></circle>
-    <!-- Right strand nodes -->
-    <circle class="dna-s2" cx="200" cy="60" r="6"><animate attributeName="cx" values="200;100;200" dur="4s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s2" cx="180" cy="100" r="6"><animate attributeName="cx" values="180;120;180" dur="4s" begin="0.3s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s2" cx="110" cy="140" r="6"><animate attributeName="cx" values="110;190;110" dur="4s" begin="0.6s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s2" cx="100" cy="180" r="6"><animate attributeName="cx" values="100;200;100" dur="4s" begin="0.9s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s2" cx="120" cy="220" r="6"><animate attributeName="cx" values="120;180;120" dur="4s" begin="1.2s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s2" cx="190" cy="260" r="6"><animate attributeName="cx" values="190;110;190" dur="4s" begin="1.5s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s2" cx="200" cy="300" r="6"><animate attributeName="cx" values="200;100;200" dur="4s" begin="1.8s" repeatCount="indefinite"/></circle>
-    <circle class="dna-s2" cx="160" cy="340" r="6"><animate attributeName="cx" values="160;140;160" dur="4s" begin="2.1s" repeatCount="indefinite"/></circle>
-    <!-- Hydrogen bonds -->
-    <line class="dna-bond" x1="100" y1="60" x2="200" y2="60" stroke-width="1.5" stroke-dasharray="4,3"/>
-    <line class="dna-bond" x1="120" y1="100" x2="180" y2="100" stroke-width="1.5" stroke-dasharray="4,3"/>
-    <line class="dna-bond" x1="190" y1="140" x2="110" y2="140" stroke-width="1.5" stroke-dasharray="4,3"/>
-    <line class="dna-bond" x1="200" y1="180" x2="100" y2="180" stroke-width="1.5" stroke-dasharray="4,3"/>
-    <line class="dna-bond" x1="180" y1="220" x2="120" y2="220" stroke-width="1.5" stroke-dasharray="4,3"/>
-    <line class="dna-bond" x1="110" y1="260" x2="190" y2="260" stroke-width="1.5" stroke-dasharray="4,3"/>
-    <line class="dna-bond" x1="100" y1="300" x2="200" y2="300" stroke-width="1.5" stroke-dasharray="4,3"/>
-    <line class="dna-bond" x1="140" y1="340" x2="160" y2="340" stroke-width="1.5" stroke-dasharray="4,3"/>
-  </g>
-  <text class="dna-t" x="150" y="385" text-anchor="middle" font-family="system-ui" font-size="9">Agent genome — each base pair encodes a capability</text>
+  <rect class="gx-bg" width="500" height="500" rx="12"/>
+  <text class="gx-t" x="250" y="24" text-anchor="middle" font-family="system-ui" font-size="13" font-weight="600">Agent Galaxy — Ecosystem at Scale</text>
+  <!-- Dust lanes -->
+  <ellipse class="gx-dust" cx="250" cy="250" rx="200" ry="60" opacity="0.3" transform="rotate(-20,250,250)"/>
+  <ellipse class="gx-dust" cx="250" cy="250" rx="150" ry="45" opacity="0.2" transform="rotate(25,250,250)"/>
+  <!-- Spiral arm 1 — blue agents -->
+  <circle class="gx-s1" r="3"><animateMotion dur="12s" repeatCount="indefinite" path="M250,250 m-180,0 a180,60 0 1,1 360,0 a180,60 0 1,1 -360,0" rotate="auto"/></circle>
+  <circle class="gx-s1" r="2.5"><animateMotion dur="12s" begin="3s" repeatCount="indefinite" path="M250,250 m-180,0 a180,60 0 1,1 360,0 a180,60 0 1,1 -360,0" rotate="auto"/></circle>
+  <circle class="gx-s1" r="2"><animateMotion dur="12s" begin="6s" repeatCount="indefinite" path="M250,250 m-180,0 a180,60 0 1,1 360,0 a180,60 0 1,1 -360,0" rotate="auto"/></circle>
+  <circle class="gx-s1" r="2"><animateMotion dur="12s" begin="9s" repeatCount="indefinite" path="M250,250 m-180,0 a180,60 0 1,1 360,0 a180,60 0 1,1 -360,0" rotate="auto"/></circle>
+  <!-- Spiral arm 2 — green agents (tilted) -->
+  <circle class="gx-s2" r="3"><animateMotion dur="10s" repeatCount="indefinite" path="M250,250 m-140,0 a140,80 0 1,1 280,0 a140,80 0 1,1 -280,0" rotate="auto"/></circle>
+  <circle class="gx-s2" r="2.5"><animateMotion dur="10s" begin="2.5s" repeatCount="indefinite" path="M250,250 m-140,0 a140,80 0 1,1 280,0 a140,80 0 1,1 -280,0" rotate="auto"/></circle>
+  <circle class="gx-s2" r="2"><animateMotion dur="10s" begin="5s" repeatCount="indefinite" path="M250,250 m-140,0 a140,80 0 1,1 280,0 a140,80 0 1,1 -280,0" rotate="auto"/></circle>
+  <circle class="gx-s2" r="2"><animateMotion dur="10s" begin="7.5s" repeatCount="indefinite" path="M250,250 m-140,0 a140,80 0 1,1 280,0 a140,80 0 1,1 -280,0" rotate="auto"/></circle>
+  <!-- Inner ring — purple agents (fast) -->
+  <circle class="gx-s3" r="3.5"><animateMotion dur="6s" repeatCount="indefinite" path="M250,250 m-80,0 a80,40 0 1,1 160,0 a80,40 0 1,1 -160,0" rotate="auto"/></circle>
+  <circle class="gx-s3" r="3"><animateMotion dur="6s" begin="2s" repeatCount="indefinite" path="M250,250 m-80,0 a80,40 0 1,1 160,0 a80,40 0 1,1 -160,0" rotate="auto"/></circle>
+  <circle class="gx-s3" r="2.5"><animateMotion dur="6s" begin="4s" repeatCount="indefinite" path="M250,250 m-80,0 a80,40 0 1,1 160,0 a80,40 0 1,1 -160,0" rotate="auto"/></circle>
+  <!-- Scattered outer stars -->
+  <circle class="gx-s4" r="1.5"><animateMotion dur="18s" repeatCount="indefinite" path="M250,250 m-210,0 a210,90 0 1,1 420,0 a210,90 0 1,1 -420,0"/></circle>
+  <circle class="gx-s4" r="1.5"><animateMotion dur="18s" begin="6s" repeatCount="indefinite" path="M250,250 m-210,0 a210,90 0 1,1 420,0 a210,90 0 1,1 -420,0"/></circle>
+  <circle class="gx-s4" r="1.5"><animateMotion dur="18s" begin="12s" repeatCount="indefinite" path="M250,250 m-210,0 a210,90 0 1,1 420,0 a210,90 0 1,1 -420,0"/></circle>
+  <!-- Galactic core -->
+  <circle class="gx-core" cx="250" cy="250" r="20" opacity="0.15">
+    <animate attributeName="r" values="20;30;20" dur="5s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="gx-core" cx="250" cy="250" r="12" opacity="0.3">
+    <animate attributeName="r" values="12;18;12" dur="3s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="gx-core" cx="250" cy="250" r="6"/>
+  <text class="gx-t" x="250" y="485" text-anchor="middle" font-family="system-ui" font-size="10">Thousands of agents orbit in organized spiral arms</text>
 </svg>
 
 ---
