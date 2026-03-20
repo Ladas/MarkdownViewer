@@ -19,6 +19,7 @@ struct MarkdownWebView: NSViewRepresentable {
     var contentWidth: Double = 980
     var mermaidThemeJSON: String = ""
     var themeCSS: String = ""
+    var themeVersion: Int = 0
     var onSearchResult: ((Int, Int) -> Void)?
     var onCopyDone: (() -> Void)?
     var onExportHTML: ((String) -> Void)?
@@ -59,15 +60,26 @@ struct MarkdownWebView: NSViewRepresentable {
         coord.onExplainWithClaude = onExplainWithClaude
         coord.onAskClaude = onAskClaude
 
+        // Check if a full page reload is needed
         let contentChanged = coord.lastMarkdown != markdown || coord.lastOverrideHTML != overrideHTML
-        if contentChanged {
+        let themeChanged = coord.lastThemeVersion != themeVersion
+        let appearanceChanged = coord.lastAppearanceMode != appearanceMode
+        let needsReload = contentChanged || themeChanged || appearanceChanged
+
+        // Apply NSAppearance immediately (before reload)
+        if appearanceChanged {
+            coord.lastAppearanceMode = appearanceMode
+            coord.applyAppearance(appearanceMode, to: webView)
+        }
+
+        if needsReload {
             coord.lastMarkdown = markdown
             coord.lastOverrideHTML = overrideHTML
+            coord.lastThemeVersion = themeVersion
             coord.lastSearchText = nil
             coord.pageLoaded = false
             var htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
             htmlToLoad = injectTheme(htmlToLoad)
-            // Save scroll position before reload, restore in didFinish
             webView.evaluateJavaScript("window.scrollY") { result, _ in
                 coord.savedScrollY = result as? Double ?? 0
                 webView.loadHTMLString(htmlToLoad, baseURL: nil)
@@ -116,20 +128,6 @@ struct MarkdownWebView: NSViewRepresentable {
             }
         }
 
-        if coord.lastAppearanceMode != appearanceMode {
-            coord.lastAppearanceMode = appearanceMode
-            coord.applyAppearance(appearanceMode, to: webView)
-            // Force full reload so mermaid re-renders with correct theme
-            if coord.pageLoaded {
-                coord.pageLoaded = false
-                var htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
-                htmlToLoad = injectTheme(htmlToLoad)
-                webView.evaluateJavaScript("window.scrollY") { result, _ in
-                    coord.savedScrollY = result as? Double ?? 0
-                    webView.loadHTMLString(htmlToLoad, baseURL: nil)
-                }
-            }
-        }
 
         if coord.lastContentWidth != contentWidth {
             coord.lastContentWidth = contentWidth
@@ -172,6 +170,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
         var lastMarkdown: String?
         var lastOverrideHTML: String?
+        var lastThemeVersion: Int = 0
         var lastSearchText: String?
         var lastNavTrigger: Int = 0
         var lastCopyRenderedTrigger: Int = 0

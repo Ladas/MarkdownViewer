@@ -189,6 +189,7 @@ public struct ContentView: View {
     @State private var contentWidth: Double = 980
     @State private var viewMode: ViewMode = .preview
     @State private var mermaidTheme: MermaidTheme = MermaidThemeManager.loadThemes()[0]
+    @State private var themeVersion: Int = 0
     @State private var availableThemes: [MermaidTheme] = MermaidThemeManager.loadThemes()
     @State private var showComments = false
     @State private var resolvedNotes: [ResolvedBatch] = []
@@ -275,6 +276,7 @@ public struct ContentView: View {
                     contentWidth: contentWidth,
                     mermaidThemeJSON: mermaidTheme.initJSON,
                     themeCSS: mermaidTheme.css,
+                    themeVersion: themeVersion,
                     onSearchResult: { total, current in
                         matchTotal = total
                         matchCurrent = current
@@ -601,7 +603,8 @@ public struct ContentView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-            .help("Appearance: \(appearanceMode) (affects preview and copy)")
+            .disabled(appearanceDisabled)
+            .help(appearanceTooltip)
             actionButton("MD", icon: "doc.on.doc") { copySource() }
                 .help("Copy raw markdown source to clipboard (Cmd+Shift+C)")
             actionButton("HTML", icon: "doc.richtext") { copyRendered() }
@@ -995,22 +998,40 @@ public struct ContentView: View {
         }
     }
 
+    private var appearanceDisabled: Bool {
+        mermaidTheme.supportedAppearances.count <= 1
+    }
+
+    private var appearanceTooltip: String {
+        if appearanceDisabled {
+            let only = mermaidTheme.supportedAppearances.first ?? "auto"
+            return "Appearance locked to \(only) — \(mermaidTheme.name) theme doesn't support switching"
+        }
+        return "Appearance: \(appearanceMode) (affects preview and copy)"
+    }
+
     private func selectMermaidTheme(_ theme: MermaidTheme) {
         mermaidTheme = theme
-        // Force page reload to re-initialize mermaid with new theme
-        let saved = currentText
-        currentText = saved + " "
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            currentText = saved
+        // If current appearance isn't supported by new theme, switch to a supported one
+        if !theme.supportedAppearances.contains(appearanceMode) {
+            if theme.supportedAppearances.contains("light") {
+                appearanceMode = "light"
+            } else if theme.supportedAppearances.contains("dark") {
+                appearanceMode = "dark"
+            } else {
+                appearanceMode = "auto"
+            }
         }
+        // Increment themeVersion to trigger reload in MarkdownWebView
+        themeVersion += 1
     }
 
     private func cycleAppearance() {
-        switch appearanceMode {
-        case "auto": appearanceMode = "light"
-        case "light": appearanceMode = "dark"
-        default: appearanceMode = "auto"
-        }
+        let supported = mermaidTheme.supportedAppearances
+        let modes = ["auto", "light", "dark"].filter { supported.contains($0) }
+        guard modes.count > 1 else { return }
+        let current = modes.firstIndex(of: appearanceMode) ?? 0
+        appearanceMode = modes[(current + 1) % modes.count]
     }
 
     private func copySource() {

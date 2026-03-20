@@ -5,6 +5,7 @@ public struct MermaidTheme: Identifiable, Hashable {
     public let name: String
     public let initJSON: String
     public let css: String
+    public let supportedAppearances: Set<String> // ["auto","light","dark"] or subset
 
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
     public static func == (lhs: MermaidTheme, rhs: MermaidTheme) -> Bool { lhs.id == rhs.id }
@@ -12,12 +13,14 @@ public struct MermaidTheme: Identifiable, Hashable {
 
 public enum MermaidThemeManager {
 
+    private static let all3: Set<String> = ["auto", "light", "dark"]
+
     private static let builtinThemes: [MermaidTheme] = [
-        MermaidTheme(id: "auto", name: "Auto (Light/Dark)", initJSON: "", css: ""),
-        MermaidTheme(id: "default", name: "Default", initJSON: "{\"theme\":\"default\"}", css: ""),
-        MermaidTheme(id: "dark", name: "Dark", initJSON: "{\"theme\":\"dark\"}", css: ""),
-        MermaidTheme(id: "forest", name: "Forest", initJSON: "{\"theme\":\"forest\"}", css: ""),
-        MermaidTheme(id: "neutral", name: "Neutral", initJSON: "{\"theme\":\"neutral\"}", css: ""),
+        MermaidTheme(id: "auto", name: "Auto (System)", initJSON: "", css: "", supportedAppearances: all3),
+        MermaidTheme(id: "default", name: "Default (Light)", initJSON: "{\"theme\":\"default\"}", css: "", supportedAppearances: ["light"]),
+        MermaidTheme(id: "dark", name: "Dark", initJSON: "{\"theme\":\"dark\"}", css: "", supportedAppearances: ["dark"]),
+        MermaidTheme(id: "forest", name: "Forest", initJSON: "{\"theme\":\"forest\"}", css: "", supportedAppearances: ["light", "dark"]),
+        MermaidTheme(id: "neutral", name: "Neutral", initJSON: "{\"theme\":\"neutral\"}", css: "", supportedAppearances: ["light", "dark"]),
     ]
 
     public static func loadThemes() -> [MermaidTheme] {
@@ -46,8 +49,9 @@ public enum MermaidThemeManager {
                   let initString = String(data: initData, encoding: .utf8) else { return nil }
 
             let css = json["css"] as? String ?? ""
+            let appearances = json["supportedAppearances"] as? [String] ?? ["auto", "light", "dark"]
             let id = url.deletingPathExtension().lastPathComponent
-            return MermaidTheme(id: "plugin-\(id)", name: name, initJSON: initString, css: css)
+            return MermaidTheme(id: "plugin-\(id)", name: name, initJSON: initString, css: css, supportedAppearances: Set(appearances))
         }
     }
 }
