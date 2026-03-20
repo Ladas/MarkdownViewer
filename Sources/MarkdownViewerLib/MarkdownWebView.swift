@@ -36,6 +36,7 @@ struct MarkdownWebView: NSViewRepresentable {
         config.userContentController.add(context.coordinator, name: "copyRendered")
         config.userContentController.add(context.coordinator, name: "exportHTML")
         config.userContentController.add(context.coordinator, name: "copyGoogleDocs")
+        config.userContentController.add(context.coordinator, name: "captureGif")
         config.userContentController.add(context.coordinator, name: "editNote")
         config.userContentController.add(context.coordinator, name: "addNoteAtHeading")
         let webView = MarkdownWKWebView(frame: .zero, configuration: config)
@@ -165,7 +166,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
         let controller = webView.configuration.userContentController
-        for name in ["copyImage", "copyRendered", "copyGoogleDocs", "exportHTML", "editNote", "addNoteAtHeading"] {
+        for name in ["copyImage", "copyRendered", "copyGoogleDocs", "captureGif", "exportHTML", "editNote", "addNoteAtHeading"] {
             controller.removeScriptMessageHandler(forName: name)
         }
     }
@@ -215,6 +216,11 @@ struct MarkdownWebView: NSViewRepresentable {
                 handleCopyRendered(message)
             } else if message.name == "exportHTML" {
                 handleExportHTML(message)
+            } else if message.name == "captureGif" {
+                if let dict = message.body as? [String: Any],
+                   let webView = message.webView {
+                    handleCaptureGif(dict, webView: webView)
+                }
             } else if message.name == "editNote" {
                 if let dict = message.body as? [String: Any],
                    let index = dict["index"] as? Int,
@@ -251,6 +257,80 @@ struct MarkdownWebView: NSViewRepresentable {
             pasteboard.setString(html, forType: .html)
             pasteboard.setString(html, forType: .string)
             onCopyDone?()
+        }
+
+        private func handleCaptureGif(_ params: [String: Any], webView: WKWebView) {
+            guard let x = params["x"] as? Double,
+                  let y = params["y"] as? Double,
+                  let width = params["width"] as? Double,
+                  let height = params["height"] as? Double,
+                  let duration = params["duration"] as? Double,
+                  let frameCount = params["frames"] as? Int else { return }
+
+            let rect = CGRect(x: x, y: y, width: width, height: height)
+            let fps = 6.0
+            let delay = 1.0 / fps
+            var frames: [CGImage] = []
+
+            func captureFrame(_ index: Int) {
+                if index >= frameCount {
+                    // Encode GIF
+                    encodeGif(frames: frames, size: CGSize(width: width, height: height), delay: delay, webView: webView)
+                    return
+                }
+
+                let config = WKSnapshotConfiguration()
+                config.rect = rect
+                config.snapshotWidth = NSNumber(value: Int(width))
+
+                webView.takeSnapshot(with: config) { image, error in
+                    if let image = image, let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                        frames.append(cgImage)
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                        captureFrame(index + 1)
+                    }
+                }
+            }
+
+            // Scroll to the SVG first
+            webView.evaluateJavaScript("window.scrollTo(0, \(y - 50))") { _, _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    captureFrame(0)
+                }
+            }
+        }
+
+        private func encodeGif(frames: [CGImage], size: CGSize, delay: Double, webView: WKWebView) {
+            guard !frames.isEmpty else {
+                webView.evaluateJavaScript("if(window._gifCaptureReject) window._gifCaptureReject(new Error('no frames'))") { _, _ in }
+                return
+            }
+
+            let data = NSMutableData()
+            guard let dest = CGImageDestinationCreateWithData(data, "com.compuserve.gif" as CFString, frames.count, nil) else { return }
+
+            let gifProps: [String: Any] = [
+                kCGImagePropertyGIFDictionary as String: [
+                    kCGImagePropertyGIFLoopCount as String: 0
+                ]
+            ]
+            CGImageDestinationSetProperties(dest, gifProps as CFDictionary)
+
+            for frame in frames {
+                let frameProps: [String: Any] = [
+                    kCGImagePropertyGIFDictionary as String: [
+                        kCGImagePropertyGIFDelayTime as String: delay
+                    ]
+                ]
+                CGImageDestinationAddImage(dest, frame, frameProps as CFDictionary)
+            }
+
+            CGImageDestinationFinalize(dest)
+
+            let base64 = (data as Data).base64EncodedString()
+            let dataUrl = "data:image/gif;base64,\(base64)"
+            webView.evaluateJavaScript("if(window._gifCaptureResolve) { window._gifCaptureResolve('\(dataUrl)'); window._gifCaptureResolve=null; window._gifCaptureReject=null; }") { _, _ in }
         }
 
         private func handleCopyGoogleDocs(_ message: WKScriptMessage) {

@@ -253,73 +253,39 @@
         return new Uint8Array(buf);
     }
 
-    // Convert animated SVG to GIF data URL
-    function svgToGifDataUrl(svg, numFrames, fps) {
-        numFrames = numFrames || 12;
-        fps = fps || 6;
-        var delay = Math.round(100 / fps);
+    // Request animated SVG → GIF capture from Swift (WKWebView.takeSnapshot)
+    function requestGifCapture(svg) {
         return new Promise(function(resolve, reject) {
             var rect = svg.getBoundingClientRect();
-            var w = Math.min(Math.ceil(rect.width), 600);
-            var h = Math.min(Math.ceil(rect.height), 600);
-            if (w === 0 || h === 0) { reject(new Error('zero size')); return; }
-
-            var canvas = document.createElement('canvas');
-            canvas.width = w; canvas.height = h;
-            var ctx = canvas.getContext('2d');
-            var frameData = [];
-            var framesLeft = numFrames;
-
-            // Get total animation duration from SVG
+            var scrollX = window.scrollX;
+            var scrollY = window.scrollY;
+            // Get animation duration
             var anims = svg.querySelectorAll('animate, animateMotion, animateTransform');
-            var maxDur = 4; // default 4 seconds
+            var maxDur = 4;
             anims.forEach(function(a) {
                 var dur = parseFloat(a.getAttribute('dur')) || 0;
                 if (dur > maxDur) maxDur = dur;
             });
-
-            function captureFrame(frameIdx) {
-                // Set SVG time to capture different frames
-                var t = (frameIdx / numFrames) * maxDur;
-                try { svg.setCurrentTime(t); } catch(e) {}
-
-                var clone = svg.cloneNode(true);
-                clone.setAttribute('width', w);
-                clone.setAttribute('height', h);
-                // Strip animations from clone for static render
-                clone.querySelectorAll('animate, animateMotion, animateTransform, set').forEach(function(a) { a.remove(); });
-
-                var svgData = new XMLSerializer().serializeToString(clone);
-                var encoded = btoa(unescape(encodeURIComponent(svgData)));
-
-                var img = new Image();
-                img.onload = function() {
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(0, 0, w, h);
-                    ctx.drawImage(img, 0, 0, w, h);
-                    frameData.push(ctx.getImageData(0, 0, w, h));
-                    framesLeft--;
-                    if (framesLeft > 0) {
-                        captureFrame(frameIdx + 1);
-                    } else {
-                        // Reset SVG time
-                        try { svg.setCurrentTime(0); } catch(e) {}
-                        // Encode GIF
-                        try {
-                            var gif = GifEncoder(w, h, frameData, delay);
-                            var binary = '';
-                            for (var i=0; i<gif.length; i++) binary += String.fromCharCode(gif[i]);
-                            resolve('data:image/gif;base64,' + btoa(binary));
-                        } catch(e) {
-                            reject(e);
-                        }
-                    }
-                };
-                img.onerror = function() { reject(new Error('frame render failed')); };
-                img.src = 'data:image/svg+xml;base64,' + encoded;
-            }
-
-            captureFrame(0);
+            // Send rect + duration to Swift for snapshot-based GIF capture
+            postToHandler('captureGif', {
+                x: rect.left + scrollX,
+                y: rect.top + scrollY,
+                width: Math.ceil(rect.width),
+                height: Math.ceil(rect.height),
+                duration: maxDur,
+                frames: 12
+            });
+            // Swift will call window._gifCaptureResolve with the data URL
+            window._gifCaptureResolve = resolve;
+            window._gifCaptureReject = reject;
+            // Timeout after 30s
+            setTimeout(function() {
+                if (window._gifCaptureReject) {
+                    window._gifCaptureReject(new Error('GIF capture timeout'));
+                    window._gifCaptureResolve = null;
+                    window._gifCaptureReject = null;
+                }
+            }, 30000);
         });
     }
 
@@ -470,14 +436,9 @@
                 var svgClone = standaloneSvgs[si];
                 if (svgClone.closest('.mermaid-container') || svgClone.closest('pre.mermaid')) continue;
                 try {
-                    // Use original SVG for capture (has live animations)
                     var origSvg = (si < origSvgs.length) ? origSvgs[si] : svgClone;
-                    var dataUrl;
-                    if (svgHasAnimation(origSvg)) {
-                        dataUrl = await svgToGifDataUrl(origSvg, 12, 6);
-                    } else {
-                        dataUrl = await svgToPngDataUrl(origSvg);
-                    }
+                    // All SVGs → PNG for now (GIF capture requires Swift-side snapshots)
+                    var dataUrl = await svgToPngDataUrl(origSvg);
                     var img = document.createElement('img');
                     img.src = dataUrl;
                     img.style.maxWidth = '100%';
