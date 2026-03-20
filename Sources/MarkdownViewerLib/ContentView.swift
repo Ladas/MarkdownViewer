@@ -188,6 +188,8 @@ public struct ContentView: View {
     @State private var appearanceMode = "auto"
     @State private var contentWidth: Double = 980
     @State private var viewMode: ViewMode = .preview
+    @State private var mermaidTheme: MermaidTheme = MermaidThemeManager.loadThemes()[0]
+    @State private var availableThemes: [MermaidTheme] = MermaidThemeManager.loadThemes()
     @State private var showComments = false
     @State private var resolvedNotes: [ResolvedBatch] = []
     @State private var previousNotes: [String] = []
@@ -271,6 +273,7 @@ public struct ContentView: View {
                     scrollToHeadingIndex: scrollToHeadingIndex,
                     appearanceMode: appearanceMode,
                     contentWidth: contentWidth,
+                    mermaidThemeJSON: mermaidTheme.initJSON,
                     onSearchResult: { total, current in
                         matchTotal = total
                         matchCurrent = current
@@ -540,7 +543,7 @@ public struct ContentView: View {
 
             Spacer()
 
-            // Center: view mode
+            // Center: view mode + theme
             Picker("", selection: $viewMode) {
                 ForEach(ViewMode.allCases, id: \.self) { mode in
                     Text(mode.rawValue).tag(mode)
@@ -574,6 +577,23 @@ public struct ContentView: View {
                 }
                 .help("Open chat with review note instructions — edit before sending")
             }
+            Menu {
+                ForEach(availableThemes) { theme in
+                    Button(action: { selectMermaidTheme(theme) }) {
+                        if theme.id == mermaidTheme.id {
+                            Label(theme.name, systemImage: "checkmark")
+                        } else {
+                            Text(theme.name)
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "paintpalette")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Mermaid diagram theme: \(mermaidTheme.name)")
             Button(action: cycleAppearance) {
                 Image(systemName: appearanceIcon)
                     .font(.system(size: 11))
@@ -971,6 +991,16 @@ public struct ContentView: View {
         case "light": return "sun.max.fill"
         case "dark": return "moon.fill"
         default: return "circle.lefthalf.filled"
+        }
+    }
+
+    private func selectMermaidTheme(_ theme: MermaidTheme) {
+        mermaidTheme = theme
+        // Force page reload to re-initialize mermaid with new theme
+        let saved = currentText
+        currentText = saved + " "
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            currentText = saved
         }
     }
 

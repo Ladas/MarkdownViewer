@@ -17,6 +17,7 @@ struct MarkdownWebView: NSViewRepresentable {
     var scrollToHeadingIndex: Int = -1
     var appearanceMode: String = "auto"
     var contentWidth: Double = 980
+    var mermaidThemeJSON: String = ""
     var onSearchResult: ((Int, Int) -> Void)?
     var onCopyDone: (() -> Void)?
     var onExportHTML: ((String) -> Void)?
@@ -40,7 +41,13 @@ struct MarkdownWebView: NSViewRepresentable {
         context.coordinator.lastMarkdown = markdown
         context.coordinator.lastOverrideHTML = overrideHTML
 
-        let html = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
+        var html = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
+        if !mermaidThemeJSON.isEmpty {
+            html = html.replacingOccurrences(
+                of: "var _mermaidCustomInit = null;",
+                with: "var _mermaidCustomInit = \(mermaidThemeJSON);"
+            )
+        }
         webView.loadHTMLString(html, baseURL: nil)
         return webView
     }
@@ -62,7 +69,13 @@ struct MarkdownWebView: NSViewRepresentable {
             coord.lastOverrideHTML = overrideHTML
             coord.lastSearchText = nil
             coord.pageLoaded = false
-            let htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
+            var htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
+            if !mermaidThemeJSON.isEmpty {
+                htmlToLoad = htmlToLoad.replacingOccurrences(
+                    of: "var _mermaidCustomInit = null;",
+                    with: "var _mermaidCustomInit = \(mermaidThemeJSON);"
+                )
+            }
             // Save scroll position before reload, restore in didFinish
             webView.evaluateJavaScript("window.scrollY") { result, _ in
                 coord.savedScrollY = result as? Double ?? 0
@@ -118,7 +131,13 @@ struct MarkdownWebView: NSViewRepresentable {
             // Force full reload so mermaid re-renders with correct theme
             if coord.pageLoaded {
                 coord.pageLoaded = false
-                let htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
+                var htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
+                if !mermaidThemeJSON.isEmpty {
+                    htmlToLoad = htmlToLoad.replacingOccurrences(
+                        of: "var _mermaidCustomInit = null;",
+                        with: "var _mermaidCustomInit = \(mermaidThemeJSON);"
+                    )
+                }
                 webView.evaluateJavaScript("window.scrollY") { result, _ in
                     coord.savedScrollY = result as? Double ?? 0
                     webView.loadHTMLString(htmlToLoad, baseURL: nil)

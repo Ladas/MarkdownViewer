@@ -81,15 +81,22 @@
             pre.replaceWith(div);
         });
 
+        // Mermaid init — theme overridable via setMermaidTheme()
+        var _mermaidCustomInit = null;
         if (typeof mermaid !== 'undefined') {
-            mermaid.initialize({
+            var config = {
                 startOnLoad: false,
-                theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
                 securityLevel: 'strict',
                 flowchart: { useMaxWidth: true },
                 sequence: { useMaxWidth: true },
                 gantt: { useMaxWidth: true }
-            });
+            };
+            if (_mermaidCustomInit) {
+                Object.assign(config, _mermaidCustomInit);
+            } else {
+                config.theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default';
+            }
+            mermaid.initialize(config);
             mermaid.run()
                 .then(addDiagramCopyButtons)
                 .catch(function(e) { console.error('Mermaid error:', e); });
