@@ -4,6 +4,39 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
     private var process: Process?
     private let workingDirectory: URL
 
+    /// Resolve full path to `claude` binary once
+    private static let claudePath: String = {
+        // Check common locations
+        let candidates = [
+            "\(NSHomeDirectory())/.npm-global/bin/claude",
+            "/usr/local/bin/claude",
+            "/opt/homebrew/bin/claude",
+            "\(NSHomeDirectory())/.local/bin/claude",
+        ]
+        for path in candidates {
+            if FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+        }
+        // Fallback: try to resolve via shell
+        let proc = Process()
+        let pipe = Pipe()
+        proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        proc.arguments = ["-l", "-i", "-c", "which claude"]
+        proc.standardOutput = pipe
+        proc.standardError = FileHandle.nullDevice
+        proc.standardInput = FileHandle.nullDevice
+        try? proc.run()
+        proc.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        if let resolved = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !resolved.isEmpty {
+            return resolved
+        }
+        return "claude" // last resort
+    }()
+
     public init(workingDirectory: URL) {
         self.workingDirectory = workingDirectory
     }
@@ -32,7 +65,7 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
     }
 
     /// Run claude CLI with streaming JSON output.
-    /// `onOutput` is called with incremental text as it arrives.
+    /// `onOutput` is called with the accumulated text each time new content arrives.
     /// `onComplete` is called with the full response and session ID.
     public func run(
         prompt: String,
@@ -42,23 +75,26 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
         onOutput: @escaping @Sendable (String) -> Void,
         onComplete: @escaping @Sendable (CLIResponse, Int32) -> Void
     ) {
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-
         let escapedPrompt = prompt
             .replacingOccurrences(of: "'", with: "'\\''")
-        var claudeCmd = "claude -p '\(escapedPrompt)' --output-format stream-json --verbose --model \(model)"
+
+        var args = ["-p", escapedPrompt,
+                    "--output-format", "stream-json",
+                    "--verbose",
+                    "--include-partial-messages",
+                    "--model", model]
         if let sid = sessionId {
-            claudeCmd += " --resume '\(sid)'"
+            args += ["--resume", sid]
         }
         if allowEditing {
-            claudeCmd += " --dangerously-skip-permissions"
+            args += ["--dangerously-skip-permissions"]
         } else {
-            claudeCmd += " --disallowedTools Edit Write Bash NotebookEdit"
+            args += ["--disallowedTools", "Edit", "Write", "Bash", "NotebookEdit"]
         }
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: shell)
-        process.arguments = ["-l", "-i", "-c", claudeCmd]
+        process.executableURL = URL(fileURLWithPath: Self.claudePath)
+        process.arguments = args
         process.currentDirectoryURL = workingDirectory
 
         var env = ProcessInfo.processInfo.environment
@@ -103,13 +139,30 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
                 let type = json["type"] as? String ?? ""
 
                 switch type {
-                case "content_block_delta":
-                    // Extract streamed text delta
-                    if let delta = json["delta"] as? [String: Any],
-                       let text = delta["text"] as? String {
-                        resultText += text
-                        DispatchQueue.main.async {
-                            onOutput(text)
+                case "system":
+                    // Capture session_id from init event (available early)
+                    if let sid = json["session_id"] as? String {
+                        resultSessionId = sid
+                    }
+                case "assistant":
+                    // Extract text from assistant message content blocks
+                    // Format: {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
+                    if let message = json["message"] as? [String: Any],
+                       let content = message["content"] as? [[String: Any]] {
+                        var textParts: [String] = []
+                        for block in content {
+                            if let blockType = block["type"] as? String,
+                               blockType == "text",
+                               let text = block["text"] as? String {
+                                textParts.append(text)
+                            }
+                        }
+                        let text = textParts.joined()
+                        if !text.isEmpty {
+                            resultText = text
+                            DispatchQueue.main.async {
+                                onOutput(text)
+                            }
                         }
                     }
                 case "result":
@@ -117,10 +170,9 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
                     if let result = json["result"] as? String {
                         resultText = result
                     }
-                    resultSessionId = json["session_id"] as? String
-                case "message_start":
-                    // Message started — could show thinking indicator
-                    break
+                    if let sid = json["session_id"] as? String {
+                        resultSessionId = sid
+                    }
                 default:
                     break
                 }

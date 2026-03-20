@@ -156,6 +156,8 @@ struct ChatPanelView: View {
             ModelOption(id: "custom", label: "Custom..."),
         ]
     }
+    @State private var pendingFullText = ""  // Full text to animate
+    @State private var streamTimer: Timer?
     @State private var showCustomModelInput = false
     @State private var customModelId = ""
     @FocusState private var isInputFocused: Bool
@@ -453,26 +455,24 @@ struct ChatPanelView: View {
             allowEditing: allowEditing,
             sessionId: historyManager?.sessionId,
             model: selectedModel,
-            onOutput: { [self] textDelta in
+            onOutput: { [self] fullText in
+                // CLI sends full text at once — start typing animation
                 MainActor.assumeIsolated {
-                    streamingResponse += textDelta
+                    startTypingAnimation(fullText)
                 }
             },
             onComplete: { [self] response, _ in
                 MainActor.assumeIsolated {
+                    stopTypingAnimation()
                     let text = response.result.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !text.isEmpty {
                         let assistantMessage = ChatMessage(role: .assistant, content: text)
                         messages.append(assistantMessage)
                         historyManager?.append(assistantMessage)
-                    } else if !streamingResponse.isEmpty {
-                        // Fallback: if JSON parsing failed, use raw output
-                        let fallbackText = streamingResponse.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !fallbackText.isEmpty {
-                            let assistantMessage = ChatMessage(role: .assistant, content: fallbackText)
-                            messages.append(assistantMessage)
-                            historyManager?.append(assistantMessage)
-                        }
+                    } else if !pendingFullText.isEmpty {
+                        let msg = ChatMessage(role: .assistant, content: pendingFullText)
+                        messages.append(msg)
+                        historyManager?.append(msg)
                     }
                     // Expired session — retry without --resume
                     if text.contains("No conversation found with session ID") {
@@ -481,17 +481,18 @@ struct ChatPanelView: View {
                             sessionIdsByDir.removeValue(forKey: root.path)
                         }
                         streamingResponse = ""
-                        // Re-run without session ID
+                        pendingFullText = ""
                         cliRunner?.run(
                             prompt: buildPrompt(prompt),
                             allowEditing: allowEditing,
                             sessionId: nil,
                             model: selectedModel,
-                            onOutput: { [self] chunk in
-                                MainActor.assumeIsolated { streamingResponse += chunk }
+                            onOutput: { [self] fullText in
+                                MainActor.assumeIsolated { startTypingAnimation(fullText) }
                             },
                             onComplete: { [self] retryResponse, _ in
                                 MainActor.assumeIsolated {
+                                    stopTypingAnimation()
                                     let retryText = retryResponse.result.trimmingCharacters(in: .whitespacesAndNewlines)
                                     if !retryText.isEmpty {
                                         let msg = ChatMessage(role: .assistant, content: retryText)
@@ -503,6 +504,7 @@ struct ChatPanelView: View {
                                         if let root = gitRoot { sessionIdsByDir[root.path] = sid }
                                     }
                                     streamingResponse = ""
+                                    pendingFullText = ""
                                     isLoading = false
                                 }
                             }
@@ -515,20 +517,49 @@ struct ChatPanelView: View {
                         if let root = gitRoot { sessionIdsByDir[root.path] = sid }
                     }
                     streamingResponse = ""
+                    pendingFullText = ""
                     isLoading = false
                 }
             }
         )
     }
 
+    // MARK: - Typing Animation
+
+    /// Animate text appearing progressively (simulates streaming since CLI buffers the full response)
+    private func startTypingAnimation(_ fullText: String) {
+        pendingFullText = fullText
+        streamTimer?.invalidate()
+
+        // Reveal text in chunks — ~30 chars every 15ms for a fast but visible effect
+        let chunkSize = 30
+        var index = 0
+        streamTimer = Timer.scheduledTimer(withTimeInterval: 0.015, repeats: true) { timer in
+            index = min(index + chunkSize, fullText.count)
+            let endIdx = fullText.index(fullText.startIndex, offsetBy: index)
+            streamingResponse = String(fullText[fullText.startIndex..<endIdx])
+            if index >= fullText.count {
+                timer.invalidate()
+            }
+        }
+    }
+
+    private func stopTypingAnimation() {
+        streamTimer?.invalidate()
+        streamTimer = nil
+    }
+
     private func cancelRequest() {
         cliRunner?.cancel()
-        if !streamingResponse.isEmpty {
-            let partial = ChatMessage(role: .assistant, content: streamingResponse + "\n\n[cancelled]")
+        stopTypingAnimation()
+        let text = pendingFullText.isEmpty ? streamingResponse : pendingFullText
+        if !text.isEmpty {
+            let partial = ChatMessage(role: .assistant, content: text + "\n\n[cancelled]")
             messages.append(partial)
             historyManager?.append(partial)
         }
         streamingResponse = ""
+        pendingFullText = ""
         isLoading = false
     }
 
