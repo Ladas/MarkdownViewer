@@ -286,7 +286,7 @@
         });
         clone.querySelectorAll('tr:nth-child(2n)').forEach(function(tr) {
             tr.querySelectorAll('td').forEach(function(td) {
-                td.style.backgroundColor = thBg.replace(')', ', 0.15)').replace('rgb(', 'rgba(');
+                td.style.backgroundColor = '#f6f8fa';
             });
         });
         clone.querySelectorAll('pre').forEach(function(pre) {
@@ -319,6 +319,7 @@
         clone.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h) {
             h.style.fontWeight = '600';
             h.style.color = h1Color;
+            h.style.backgroundColor = 'transparent';
             h.style.marginTop = '24px';
             h.style.marginBottom = '16px';
         });
@@ -328,6 +329,7 @@
         });
         clone.querySelectorAll('a').forEach(function(a) {
             a.style.color = linkColor;
+            a.style.backgroundColor = 'transparent';
         });
 
         clone.normalize();
@@ -339,25 +341,35 @@
     async function buildStandaloneHTML(mode) {
         var clone = await prepareCleanContent();
 
+        // Collect only essential CSS (skip Font Awesome and mermaid — diagrams are PNGs)
         var styles = '';
         for (var i = 0; i < document.styleSheets.length; i++) {
             try {
                 var rules = document.styleSheets[i].cssRules;
+                if (!rules || rules.length === 0) continue;
+                // Skip Font Awesome (huge base64 fonts, ~1.2MB)
+                var first = rules[0].cssText || '';
+                if (first.indexOf('font-awesome') !== -1 || first.indexOf('FontAwesome') !== -1 ||
+                    first.indexOf('fa-') !== -1) continue;
                 for (var j = 0; j < rules.length; j++) {
                     var rule = rules[j];
+                    var ruleText = rule.cssText || '';
+                    // Skip @font-face rules (base64 font data)
+                    if (rule.type === CSSRule.FONT_FACE_RULE) continue;
+                    // Skip mermaid-specific rules (diagrams are PNGs in copy)
+                    if (ruleText.indexOf('.mermaid') !== -1 && ruleText.indexOf('.mermaid-c') === -1) continue;
                     if (mode === 'light' && rule.type === CSSRule.MEDIA_RULE &&
                         rule.conditionText && rule.conditionText.indexOf('dark') !== -1) {
-                        continue; // Skip dark media queries in light mode
+                        continue;
                     }
                     if (mode === 'dark' && rule.type === CSSRule.MEDIA_RULE &&
                         rule.conditionText && rule.conditionText.indexOf('dark') !== -1) {
-                        // Extract dark rules as unconditional
                         for (var k = 0; k < rule.cssRules.length; k++) {
                             styles += rule.cssRules[k].cssText + '\n';
                         }
                         continue;
                     }
-                    styles += rule.cssText + '\n';
+                    styles += ruleText + '\n';
                 }
             } catch(e) {}
         }
