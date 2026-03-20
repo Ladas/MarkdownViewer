@@ -137,6 +137,20 @@
             clone.setAttribute('width', w);
             clone.setAttribute('height', h);
 
+            // Inline computed styles for elements affected by theme CSS
+            // (CSS doesn't apply when SVG is rendered as <img> data URI)
+            var origEls = svg.querySelectorAll('text, .edgeLabel span, .edgeLabel div, .edgeLabel p, .label div, foreignObject div, foreignObject span');
+            var cloneEls = clone.querySelectorAll('text, .edgeLabel span, .edgeLabel div, .edgeLabel p, .label div, foreignObject div, foreignObject span');
+            for (var si = 0; si < origEls.length && si < cloneEls.length; si++) {
+                var cs = window.getComputedStyle(origEls[si]);
+                if (origEls[si].tagName === 'text') {
+                    cloneEls[si].setAttribute('fill', cs.fill || cs.color);
+                } else {
+                    cloneEls[si].style.color = cs.color;
+                    cloneEls[si].style.backgroundColor = cs.backgroundColor;
+                }
+            }
+
             var svgData = new XMLSerializer().serializeToString(clone);
             var encoded = btoa(unescape(encodeURIComponent(svgData)));
 
