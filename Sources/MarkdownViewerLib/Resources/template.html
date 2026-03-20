@@ -240,7 +240,28 @@
             } catch(e) {}
         }
 
-        // Inline table styles for Google Docs compatibility
+        // Inline computed styles for Google Docs compatibility
+        // Uses getComputedStyle on live DOM to pick up theme colors
+        function cs(selector, idx) {
+            var el = content.querySelectorAll(selector)[idx || 0];
+            return el ? window.getComputedStyle(el) : null;
+        }
+
+        // Sample computed colors from live DOM (with theme applied)
+        var thBg = (cs('th') || {}).backgroundColor || '#f6f8fa';
+        var thColor = (cs('th') || {}).color || '#000';
+        var thBorder = (cs('th') || {}).borderColor || '#d0d7de';
+        var tdBorder = (cs('td') || {}).borderColor || '#d0d7de';
+        var h1Color = (cs('h1') || {}).color || 'inherit';
+        var h1Border = (cs('h1') || {}).borderBottomColor || '#d0d7de';
+        var bqBorder = (cs('blockquote') || {}).borderLeftColor || '#d0d7de';
+        var bqColor = (cs('blockquote') || {}).color || '#656d76';
+        var codeBg = (cs('code') || {}).backgroundColor || 'rgba(175,184,193,0.2)';
+        var codeColor = (cs('code') || {}).color || 'inherit';
+        var preBg = (cs('pre:not(.mermaid)') || {}).backgroundColor || '#f6f8fa';
+        var preBorder = (cs('pre:not(.mermaid)') || {}).borderLeftColor || 'transparent';
+        var linkColor = (cs('a') || {}).color || '#0969da';
+
         clone.querySelectorAll('table').forEach(function(table) {
             table.style.borderCollapse = 'collapse';
             table.style.borderSpacing = '0';
@@ -251,27 +272,27 @@
         });
         clone.querySelectorAll('th').forEach(function(th) {
             th.style.padding = '8px 16px';
-            th.style.border = '1px solid #d0d7de';
+            th.style.border = '1px solid ' + thBorder;
             th.style.fontWeight = '600';
-            th.style.backgroundColor = '#f6f8fa';
+            th.style.backgroundColor = thBg;
+            th.style.color = thColor;
             th.style.textAlign = 'left';
             th.style.whiteSpace = 'nowrap';
         });
         clone.querySelectorAll('td').forEach(function(td) {
             td.style.padding = '8px 16px';
-            td.style.border = '1px solid #d0d7de';
+            td.style.border = '1px solid ' + tdBorder;
             td.style.textAlign = 'left';
         });
         clone.querySelectorAll('tr:nth-child(2n)').forEach(function(tr) {
             tr.querySelectorAll('td').forEach(function(td) {
-                td.style.backgroundColor = '#f6f8fa';
+                td.style.backgroundColor = thBg.replace(')', ', 0.15)').replace('rgb(', 'rgba(');
             });
         });
-
-        // Inline code block styles for Google Docs compatibility
         clone.querySelectorAll('pre').forEach(function(pre) {
             if (pre.classList.contains('mermaid')) return;
-            pre.style.backgroundColor = '#f6f8fa';
+            pre.style.backgroundColor = preBg;
+            pre.style.borderLeft = '3px solid ' + preBorder;
             pre.style.borderRadius = '6px';
             pre.style.padding = '16px';
             pre.style.overflow = 'auto';
@@ -282,29 +303,31 @@
         clone.querySelectorAll('code').forEach(function(code) {
             code.style.fontFamily = 'SF Mono, Menlo, Consolas, monospace';
             code.style.fontSize = '13px';
+            code.style.color = codeColor;
             if (!code.parentElement || code.parentElement.tagName !== 'PRE') {
-                // Inline code
-                code.style.backgroundColor = 'rgba(175, 184, 193, 0.2)';
+                code.style.backgroundColor = codeBg;
                 code.style.borderRadius = '3px';
                 code.style.padding = '2px 5px';
             }
         });
-        // Inline blockquote styles
         clone.querySelectorAll('blockquote').forEach(function(bq) {
-            bq.style.borderLeft = '4px solid #d0d7de';
-            bq.style.color = '#656d76';
+            bq.style.borderLeft = '4px solid ' + bqBorder;
+            bq.style.color = bqColor;
             bq.style.paddingLeft = '16px';
             bq.style.marginLeft = '0';
         });
-        // Inline heading styles
         clone.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h) {
             h.style.fontWeight = '600';
+            h.style.color = h1Color;
             h.style.marginTop = '24px';
             h.style.marginBottom = '16px';
         });
         clone.querySelectorAll('h1,h2').forEach(function(h) {
-            h.style.borderBottom = '1px solid #d0d7de';
+            h.style.borderBottom = '1px solid ' + h1Border;
             h.style.paddingBottom = '8px';
+        });
+        clone.querySelectorAll('a').forEach(function(a) {
+            a.style.color = linkColor;
         });
 
         clone.normalize();
