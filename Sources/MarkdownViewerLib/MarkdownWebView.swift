@@ -509,6 +509,15 @@ class MarkdownWKWebView: WKWebView {
         saveDiagramItem.image = NSImage(systemSymbolName: "square.and.arrow.down", accessibilityDescription: "Save Diagram")
         menu.addItem(saveDiagramItem)
 
+        let copyGifItem = NSMenuItem(
+            title: "Copy as Animated GIF",
+            action: #selector(copyDiagramAsGIF(_:)),
+            keyEquivalent: ""
+        )
+        copyGifItem.target = self
+        copyGifItem.image = NSImage(systemSymbolName: "play.rectangle", accessibilityDescription: "Copy GIF")
+        menu.addItem(copyGifItem)
+
         super.willOpenMenu(menu, with: event)
     }
 
@@ -544,6 +553,28 @@ class MarkdownWKWebView: WKWebView {
                 var el = document.elementFromPoint(\(lastClickPoint.x), \(lastClickPoint.y));
                 var svg = el ? (el.closest('svg') || el.closest('.mermaid-container svg') || el.closest('pre.mermaid svg')) : null;
                 if (svg) {
+                    svgToPngDataUrl(svg).then(function(url) {
+                        postToHandler('copyImage', url);
+                    });
+                }
+            })()
+        """) { _, _ in }
+    }
+
+    @objc private func copyDiagramAsGIF(_ sender: Any?) {
+        evaluateJavaScript("""
+            (function() {
+                var el = document.elementFromPoint(\(lastClickPoint.x), \(lastClickPoint.y));
+                var svg = el ? (el.closest('svg') || el.closest('.mermaid-container svg') || el.closest('pre.mermaid svg')) : null;
+                if (svg && svgHasAnimation(svg)) {
+                    requestGifCapture(svg).then(function(url) {
+                        postToHandler('copyImage', url);
+                    }).catch(function() {
+                        svgToPngDataUrl(svg).then(function(url) {
+                            postToHandler('copyImage', url);
+                        });
+                    });
+                } else if (svg) {
                     svgToPngDataUrl(svg).then(function(url) {
                         postToHandler('copyImage', url);
                     });

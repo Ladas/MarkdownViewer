@@ -395,6 +395,30 @@
         };
         btnGroup.appendChild(saveBtn);
 
+        // GIF button (only for animated SVGs)
+        if (svgHasAnimation(svg)) {
+            var gifBtn = document.createElement('button');
+            gifBtn.className = 'mermaid-copy-btn';
+            gifBtn.textContent = 'GIF';
+            gifBtn.onclick = function(e) {
+                e.stopPropagation();
+                gifBtn.textContent = 'Capturing...';
+                requestGifCapture(svg).then(function(gifUrl) {
+                    postToHandler('copyImage', gifUrl);
+                    gifBtn.textContent = 'Copied!';
+                    setTimeout(function() { gifBtn.textContent = 'GIF'; }, 1500);
+                }).catch(function() {
+                    // Fallback to PNG
+                    svgToPngDataUrl(svg).then(function(pngUrl) {
+                        postToHandler('copyImage', pngUrl);
+                        gifBtn.textContent = 'PNG copied';
+                        setTimeout(function() { gifBtn.textContent = 'GIF'; }, 1500);
+                    });
+                });
+            };
+            btnGroup.appendChild(gifBtn);
+        }
+
         wrapper.appendChild(btnGroup);
     }
 
