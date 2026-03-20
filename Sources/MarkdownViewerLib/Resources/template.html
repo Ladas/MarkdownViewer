@@ -203,20 +203,24 @@
         });
     }
 
-    // Shared: clone content, convert mermaid to PNG, clean up artifacts
-    async function prepareCleanContent() {
+    // Shared: clone content, clean up artifacts
+    // keepSVG=true: preserve inline SVGs (for HTML copy — animations survive)
+    // keepSVG=false: convert all SVGs to PNG (for GDoc copy — static images)
+    async function prepareCleanContent(keepSVG) {
         var content = document.getElementById('content');
 
-        // Convert all mermaid SVGs to PNG using originals (for correct dimensions)
-        var origMermaids = content.querySelectorAll('pre.mermaid');
+        // Convert mermaid SVGs to PNG (unless keepSVG)
         var pngUrls = [];
-        for (var i = 0; i < origMermaids.length; i++) {
-            var svg = origMermaids[i].querySelector('svg');
-            if (svg) {
-                try { pngUrls.push(await svgToPngDataUrl(svg)); }
-                catch(e) { pngUrls.push(null); }
-            } else {
-                pngUrls.push(null);
+        if (!keepSVG) {
+            var origMermaids = content.querySelectorAll('pre.mermaid');
+            for (var i = 0; i < origMermaids.length; i++) {
+                var svg = origMermaids[i].querySelector('svg');
+                if (svg) {
+                    try { pngUrls.push(await svgToPngDataUrl(svg)); }
+                    catch(e) { pngUrls.push(null); }
+                } else {
+                    pngUrls.push(null);
+                }
             }
         }
 
@@ -229,29 +233,36 @@
             m.parentNode.replaceChild(document.createTextNode(m.textContent), m);
         });
 
-        // Replace mermaid diagrams with PNG images
-        var cloneMermaids = clone.querySelectorAll('pre.mermaid');
-        cloneMermaids.forEach(function(pre, i) {
-            if (!pngUrls[i]) return;
-            var img = document.createElement('img');
-            img.src = pngUrls[i];
-            img.style.maxWidth = '100%';
-            var container = pre.closest('.mermaid-container');
-            (container || pre).replaceWith(img);
-        });
-
-        // Convert standalone SVGs to PNG for copy/export
-        var standaloneSvgs = clone.querySelectorAll('svg:not(.mermaid svg)');
-        for (var si = 0; si < standaloneSvgs.length; si++) {
-            var svg = standaloneSvgs[si];
-            if (svg.closest('.mermaid-container') || svg.closest('pre.mermaid')) continue;
-            try {
-                var pngUrl = await svgToPngDataUrl(svg);
+        // Replace mermaid diagrams with PNG images (unless keepSVG)
+        if (!keepSVG) {
+            var cloneMermaids = clone.querySelectorAll('pre.mermaid');
+            cloneMermaids.forEach(function(pre, i) {
+                if (!pngUrls[i]) return;
                 var img = document.createElement('img');
-                img.src = pngUrl;
+                img.src = pngUrls[i];
                 img.style.maxWidth = '100%';
-                svg.replaceWith(img);
-            } catch(e) {}
+                var container = pre.closest('.mermaid-container');
+                (container || pre).replaceWith(img);
+            });
+        } else {
+            // Keep SVGs but remove copy buttons
+            clone.querySelectorAll('.mermaid-copy-btn').forEach(function(b) { b.remove(); });
+        }
+
+        // Convert standalone SVGs to PNG (unless keepSVG — preserves animations)
+        if (!keepSVG) {
+            var standaloneSvgs = clone.querySelectorAll('svg:not(.mermaid svg)');
+            for (var si = 0; si < standaloneSvgs.length; si++) {
+                var svg = standaloneSvgs[si];
+                if (svg.closest('.mermaid-container') || svg.closest('pre.mermaid')) continue;
+                try {
+                    var pngUrl = await svgToPngDataUrl(svg);
+                    var img = document.createElement('img');
+                    img.src = pngUrl;
+                    img.style.maxWidth = '100%';
+                    svg.replaceWith(img);
+                } catch(e) {}
+            }
         }
 
         // Inline computed styles for Google Docs compatibility
@@ -364,7 +375,7 @@
     // Build standalone HTML from rendered content
     // mode: 'auto' (include media queries), 'light', or 'dark'
     async function buildStandaloneHTML(mode) {
-        var clone = await prepareCleanContent();
+        var clone = await prepareCleanContent(true);
 
         // Collect only essential CSS (skip Font Awesome and mermaid — diagrams are PNGs)
         var styles = '';
@@ -432,7 +443,7 @@
     // Copy for Google Docs — Google Docs native clipboard format
     async function copyForGoogleDocs() {
         try {
-            var clone = await prepareCleanContent();
+            var clone = await prepareCleanContent(false);
             var content = document.getElementById('content');
 
             // Sample colors from live DOM

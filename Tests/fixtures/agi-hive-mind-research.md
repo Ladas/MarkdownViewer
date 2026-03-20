@@ -354,4 +354,109 @@ class ResearchAgent(Agent):
 
 ---
 
-*Tests: tables, mermaid (flowchart, sequence, state, mindmap, pie, xychart, gantt), inline SVG with theme support, code blocks, task lists, math, blockquotes, links, review notes.*
+## Appendix: Inline SVG Diagrams
+
+### Static SVG with Theme Support
+
+<svg width="500" height="100" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @media (prefers-color-scheme: dark) { .bg{fill:#161b22} .t{fill:#e6edf3} .b1{fill:#1f6feb} .b2{fill:#238636} .b3{fill:#da3633} .arr{stroke:#8b949e;fill:#8b949e} }
+    @media (prefers-color-scheme: light) { .bg{fill:#f6f8fa} .t{fill:#1f2328} .b1{fill:#0969da} .b2{fill:#1a7f37} .b3{fill:#cf222e} .arr{stroke:#656d76;fill:#656d76} }
+  </style>
+  <rect class="bg" width="500" height="100" rx="8"/>
+  <rect class="b1" x="20" y="25" width="120" height="50" rx="6"/>
+  <text x="80" y="55" text-anchor="middle" fill="white" font-family="system-ui" font-size="13">Research</text>
+  <line class="arr" x1="140" y1="50" x2="175" y2="50" stroke-width="2"/>
+  <polygon class="arr" points="175,45 185,50 175,55"/>
+  <rect class="b2" x="190" y="25" width="120" height="50" rx="6"/>
+  <text x="250" y="55" text-anchor="middle" fill="white" font-family="system-ui" font-size="13">Analyze</text>
+  <line class="arr" x1="310" y1="50" x2="345" y2="50" stroke-width="2"/>
+  <polygon class="arr" points="345,45 355,50 345,55"/>
+  <rect class="b3" x="360" y="25" width="120" height="50" rx="6"/>
+  <text x="420" y="55" text-anchor="middle" fill="white" font-family="system-ui" font-size="13">Execute</text>
+</svg>
+
+### Animated SVG: Agent Pulse Network
+
+<svg width="500" height="200" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @media (prefers-color-scheme: dark) { .nbg{fill:#0d1117} .nstroke{stroke:#30363d} .nfill{fill:#1f6feb} .ntxt{fill:#e6edf3} .line{stroke:#30363d} }
+    @media (prefers-color-scheme: light) { .nbg{fill:#ffffff} .nstroke{stroke:#d0d7de} .nfill{fill:#0969da} .ntxt{fill:#1f2328} .line{stroke:#d0d7de} }
+  </style>
+  <rect class="nbg nstroke" width="500" height="200" rx="10" stroke-width="1"/>
+  <!-- Connection lines -->
+  <line class="line" x1="250" y1="50" x2="100" y2="140" stroke-width="1.5"/>
+  <line class="line" x1="250" y1="50" x2="250" y2="140" stroke-width="1.5"/>
+  <line class="line" x1="250" y1="50" x2="400" y2="140" stroke-width="1.5"/>
+  <!-- Orchestrator node with pulse -->
+  <circle class="nfill" cx="250" cy="50" r="20" opacity="0.3">
+    <animate attributeName="r" values="20;28;20" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.3;0.1;0.3" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="nfill" cx="250" cy="50" r="16"/>
+  <text x="250" y="55" text-anchor="middle" fill="white" font-family="system-ui" font-size="10" font-weight="600">HUB</text>
+  <!-- Agent nodes with staggered pulses -->
+  <circle class="nfill" cx="100" cy="140" r="14" opacity="0.3">
+    <animate attributeName="r" values="14;20;14" dur="2s" begin="0.3s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.3;0.1;0.3" dur="2s" begin="0.3s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="nfill" cx="100" cy="140" r="12"/>
+  <text x="100" y="144" text-anchor="middle" fill="white" font-family="system-ui" font-size="8">A1</text>
+  <circle class="nfill" cx="250" cy="140" r="14" opacity="0.3">
+    <animate attributeName="r" values="14;20;14" dur="2s" begin="0.6s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.3;0.1;0.3" dur="2s" begin="0.6s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="nfill" cx="250" cy="140" r="12"/>
+  <text x="250" y="144" text-anchor="middle" fill="white" font-family="system-ui" font-size="8">A2</text>
+  <circle class="nfill" cx="400" cy="140" r="14" opacity="0.3">
+    <animate attributeName="r" values="14;20;14" dur="2s" begin="0.9s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.3;0.1;0.3" dur="2s" begin="0.9s" repeatCount="indefinite"/>
+  </circle>
+  <circle class="nfill" cx="400" cy="140" r="12"/>
+  <text x="400" y="144" text-anchor="middle" fill="white" font-family="system-ui" font-size="8">A3</text>
+  <!-- Data flow dots -->
+  <circle class="nfill" r="3">
+    <animateMotion dur="1.5s" repeatCount="indefinite" path="M250,50 L100,140"/>
+  </circle>
+  <circle class="nfill" r="3">
+    <animateMotion dur="1.5s" begin="0.5s" repeatCount="indefinite" path="M250,50 L250,140"/>
+  </circle>
+  <circle class="nfill" r="3">
+    <animateMotion dur="1.5s" begin="1s" repeatCount="indefinite" path="M250,50 L400,140"/>
+  </circle>
+  <text class="ntxt" x="250" y="185" text-anchor="middle" font-family="system-ui" font-size="10">Agent Swarm — data flows from orchestrator to workers</text>
+</svg>
+
+### Animated SVG: Processing Pipeline
+
+<svg width="500" height="80" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @media (prefers-color-scheme: dark) { .pbg{fill:#0d1117} .pbox{fill:#21262d;stroke:#30363d} .ptxt{fill:#e6edf3} .pdot{fill:#3fb950} .pline{stroke:#30363d} }
+    @media (prefers-color-scheme: light) { .pbg{fill:#f6f8fa} .pbox{fill:#ffffff;stroke:#d0d7de} .ptxt{fill:#1f2328} .pdot{fill:#1a7f37} .pline{stroke:#d0d7de} }
+  </style>
+  <rect class="pbg" width="500" height="80" rx="6"/>
+  <rect class="pbox" x="20" y="20" width="90" height="40" rx="6" stroke-width="1"/>
+  <text class="ptxt" x="65" y="45" text-anchor="middle" font-family="system-ui" font-size="11">Parse</text>
+  <line class="pline" x1="110" y1="40" x2="150" y2="40" stroke-width="1.5"/>
+  <rect class="pbox" x="150" y="20" width="90" height="40" rx="6" stroke-width="1"/>
+  <text class="ptxt" x="195" y="45" text-anchor="middle" font-family="system-ui" font-size="11">Analyze</text>
+  <line class="pline" x1="240" y1="40" x2="280" y2="40" stroke-width="1.5"/>
+  <rect class="pbox" x="280" y="20" width="90" height="40" rx="6" stroke-width="1"/>
+  <text class="ptxt" x="325" y="45" text-anchor="middle" font-family="system-ui" font-size="11">Execute</text>
+  <line class="pline" x1="370" y1="40" x2="410" y2="40" stroke-width="1.5"/>
+  <rect class="pbox" x="410" y="20" width="70" height="40" rx="6" stroke-width="1"/>
+  <text class="ptxt" x="445" y="45" text-anchor="middle" font-family="system-ui" font-size="11">Done</text>
+  <!-- Animated progress dot -->
+  <circle class="pdot" r="5">
+    <animateMotion dur="3s" repeatCount="indefinite" path="M65,40 L195,40 L325,40 L445,40" keyTimes="0;0.33;0.66;1" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"/>
+  </circle>
+  <circle class="pdot" r="5" opacity="0.3">
+    <animateMotion dur="3s" repeatCount="indefinite" path="M65,40 L195,40 L325,40 L445,40" keyTimes="0;0.33;0.66;1" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1"/>
+    <animate attributeName="r" values="5;12;5" dur="3s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.3;0;0.3" dur="3s" repeatCount="indefinite"/>
+  </circle>
+</svg>
+
+---
+
+*Tests: tables, mermaid (flowchart, sequence, state, mindmap, pie, xychart, gantt), inline SVG (static + animated with SMIL), theme-aware SVG, code blocks, task lists, math, blockquotes, links, review notes.*
