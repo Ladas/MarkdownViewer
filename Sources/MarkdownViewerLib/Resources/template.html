@@ -401,19 +401,18 @@
             + '\n</article>\n</body>\n</html>';
     }
 
-    // Copy for Google Docs — bare HTML with <font> tags (most reliable)
+    // Copy for Google Docs — Google Docs native clipboard format
     async function copyForGoogleDocs() {
         var clone = await prepareCleanContent();
 
-        // Strip ALL classes and IDs
+        // Strip classes/ids (Google Docs ignores them)
         clone.querySelectorAll('[class],[id]').forEach(function(el) {
             el.removeAttribute('class');
             el.removeAttribute('id');
         });
 
-        // Google Docs exact clipboard format for tables
-        var gdocCell = 'border-left:solid #000000 1pt;border-right:solid #000000 1pt;border-bottom:solid #000000 1pt;border-top:solid #000000 1pt;vertical-align:top;padding:5pt 5pt 5pt 5pt;overflow:hidden;overflow-wrap:break-word';
-        var gdocSpan = 'font-size:10pt;font-family:Arial,sans-serif;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap';
+        // Google Docs cell style
+        var cellBorder = 'border-left:solid #000 1pt;border-right:solid #000 1pt;border-bottom:solid #000 1pt;border-top:solid #000 1pt;vertical-align:top;padding:5pt 5pt 5pt 5pt;overflow:hidden;overflow-wrap:break-word';
 
         clone.querySelectorAll('table').forEach(function(table) {
             table.removeAttribute('border');
@@ -421,50 +420,41 @@
             table.removeAttribute('cellspacing');
             table.removeAttribute('width');
             table.style.cssText = 'border:none;border-collapse:collapse';
-            // Wrap in div like Google Docs does
-            var wrapper = document.createElement('div');
-            wrapper.setAttribute('dir', 'ltr');
-            wrapper.style.cssText = 'margin-left:0pt';
-            wrapper.setAttribute('align', 'left');
-            table.parentNode.insertBefore(wrapper, table);
-            wrapper.appendChild(table);
         });
+
+        // Headers: background on TD, text color via span with background-color:transparent
         clone.querySelectorAll('th').forEach(function(th) {
             var text = th.textContent;
-            // Convert th to td (Google Docs format uses td for everything)
             var td = document.createElement('td');
-            td.style.cssText = gdocCell + ';background-color:' + thBgHex;
-            td.innerHTML = '<p dir="ltr" style="line-height:1.2;margin-top:0pt;margin-bottom:0pt;"><span style="' + gdocSpan + ';color:' + thColorHex + ';background-color:transparent;font-weight:700;">' + escapeHtml(text) + '</span></p>';
+            td.style.cssText = cellBorder + ';background-color:' + thBgHex;
+            td.innerHTML = '<p dir="ltr" style="line-height:1.2;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:10pt;font-family:Arial,sans-serif;color:' + thColorHex + ';background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre-wrap;">' + escapeHtml(text) + '</span></p>';
             th.parentNode.replaceChild(td, th);
         });
-        clone.querySelectorAll('td').forEach(function(td) {
-            if (td.style.cssText.indexOf('border-left') !== -1) return; // already processed (was th)
-            var html = td.innerHTML;
-            td.style.cssText = gdocCell;
-            td.innerHTML = '<p dir="ltr" style="line-height:1.2;margin-top:0pt;margin-bottom:0pt;"><span style="' + gdocSpan + ';color:#000000;background-color:transparent;font-weight:400;">' + html + '</span></p>';
+
+        // Regular cells: keep existing content (including images)
+        var processedCells = clone.querySelectorAll('td');
+        for (var ci = 0; ci < processedCells.length; ci++) {
+            var td = processedCells[ci];
+            if (td.style.cssText && td.style.cssText.indexOf('border-left') !== -1) continue;
+            td.style.cssText = cellBorder;
+        }
+
+        // Preserve images (don't wrap in spans)
+        clone.querySelectorAll('img').forEach(function(img) {
+            img.style.maxWidth = '100%';
+            img.removeAttribute('class');
         });
 
-        // Headings: use font tag for color
+        // Headings
         clone.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h) {
-            var text = h.textContent;
             h.removeAttribute('style');
-            h.innerHTML = '<font color="' + rgbToHex(h1Color) + '">' + escapeHtml(text) + '</font>';
+            h.style.color = rgbToHex(h1Color);
         });
 
-        // Code blocks: simple styling
+        // Code blocks
         clone.querySelectorAll('pre').forEach(function(pre) {
             pre.removeAttribute('style');
             pre.style.cssText = 'background-color:#f6f8fa;padding:12px;font-family:monospace;font-size:12px';
-        });
-        clone.querySelectorAll('code').forEach(function(code) {
-            code.removeAttribute('style');
-            code.style.fontFamily = 'monospace';
-            code.style.fontSize = '12px';
-        });
-
-        // Links
-        clone.querySelectorAll('a').forEach(function(a) {
-            a.removeAttribute('style');
         });
 
         // Blockquotes
@@ -473,10 +463,10 @@
             bq.style.cssText = 'border-left:4px solid #ccc;padding-left:16px;margin-left:0;color:#555';
         });
 
-        // Wrap in Google Docs clipboard envelope
+        // Wrap in Google Docs envelope
         var guid = 'xxxxxxxx-xxxx-4xxx'.replace(/x/g, function() { return (Math.random()*16|0).toString(16); });
-        var gdocHtml = '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-' + guid + '">' + clone.innerHTML + '</b>';
-        postToHandler('copyGoogleDocs', gdocHtml);
+        var html = '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-' + guid + '">' + clone.innerHTML + '</b>';
+        postToHandler('copyGoogleDocs', html);
     }
 
     function escapeHtml(text) {
