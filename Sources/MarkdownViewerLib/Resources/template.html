@@ -346,7 +346,50 @@
     }
 
     // Per-diagram hover copy buttons
+    // Add hover buttons (Copy + Save) to a diagram wrapper
+    function addDiagramButtons(wrapper, svg) {
+        var btnGroup = document.createElement('div');
+        btnGroup.className = 'mermaid-btn-group';
+
+        // Copy button
+        var copyBtn = document.createElement('button');
+        copyBtn.className = 'mermaid-copy-btn';
+        copyBtn.textContent = 'Copy';
+        copyBtn.onclick = function(e) {
+            e.stopPropagation();
+            svgToPngDataUrl(svg).then(function(pngUrl) {
+                postToHandler('copyImage', pngUrl);
+                copyBtn.textContent = 'Copied!';
+                setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
+            }).catch(function() {
+                copyBtn.textContent = 'Error';
+                setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
+            });
+        };
+        btnGroup.appendChild(copyBtn);
+
+        // Save/download button
+        var saveBtn = document.createElement('button');
+        saveBtn.className = 'mermaid-copy-btn';
+        saveBtn.textContent = 'Save';
+        saveBtn.onclick = function(e) {
+            e.stopPropagation();
+            svgToPngDataUrl(svg).then(function(pngUrl) {
+                postToHandler('saveDiagram', pngUrl);
+                saveBtn.textContent = 'Saved!';
+                setTimeout(function() { saveBtn.textContent = 'Save'; }, 1500);
+            }).catch(function() {
+                saveBtn.textContent = 'Error';
+                setTimeout(function() { saveBtn.textContent = 'Save'; }, 1500);
+            });
+        };
+        btnGroup.appendChild(saveBtn);
+
+        wrapper.appendChild(btnGroup);
+    }
+
     function addDiagramCopyButtons() {
+        // Mermaid diagrams
         document.querySelectorAll('pre.mermaid').forEach(function(el) {
             if (el.parentNode.classList && el.parentNode.classList.contains('mermaid-container')) return;
             var svg = el.querySelector('svg');
@@ -356,22 +399,19 @@
             wrapper.className = 'mermaid-container';
             el.parentNode.insertBefore(wrapper, el);
             wrapper.appendChild(el);
+            addDiagramButtons(wrapper, svg);
+        });
 
-            var btn = document.createElement('button');
-            btn.className = 'mermaid-copy-btn';
-            btn.textContent = 'Copy diagram';
-            btn.onclick = function(e) {
-                e.stopPropagation();
-                svgToPngDataUrl(svg).then(function(pngUrl) {
-                    postToHandler('copyImage', pngUrl);
-                    btn.textContent = 'Copied!';
-                    setTimeout(function() { btn.textContent = 'Copy diagram'; }, 1500);
-                }).catch(function() {
-                    btn.textContent = 'Error';
-                    setTimeout(function() { btn.textContent = 'Copy diagram'; }, 1500);
-                });
-            };
-            wrapper.appendChild(btn);
+        // Standalone inline SVGs
+        document.querySelectorAll('#content > svg, #content > p > svg').forEach(function(svg) {
+            if (svg.closest('.mermaid-container') || svg.closest('pre.mermaid')) return;
+            if (svg.parentNode.classList && svg.parentNode.classList.contains('svg-container')) return;
+
+            var wrapper = document.createElement('div');
+            wrapper.className = 'mermaid-container svg-container';
+            svg.parentNode.insertBefore(wrapper, svg);
+            wrapper.appendChild(svg);
+            addDiagramButtons(wrapper, svg);
         });
     }
 
@@ -437,8 +477,18 @@
                 if (svgClone.closest('.mermaid-container') || svgClone.closest('pre.mermaid')) continue;
                 try {
                     var origSvg = (si < origSvgs.length) ? origSvgs[si] : svgClone;
-                    // All SVGs → PNG for now (GIF capture requires Swift-side snapshots)
-                    var dataUrl = await svgToPngDataUrl(origSvg);
+                    var dataUrl;
+                    if (svgHasAnimation(origSvg)) {
+                        // Animated SVG → GIF via Swift snapshots
+                        try {
+                            dataUrl = await requestGifCapture(origSvg);
+                        } catch(e) {
+                            // Fallback to static PNG
+                            dataUrl = await svgToPngDataUrl(origSvg);
+                        }
+                    } else {
+                        dataUrl = await svgToPngDataUrl(origSvg);
+                    }
                     var img = document.createElement('img');
                     img.src = dataUrl;
                     img.style.maxWidth = '100%';

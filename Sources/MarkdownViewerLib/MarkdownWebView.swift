@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import AppKit
+import UniformTypeIdentifiers
 
 struct MarkdownWebView: NSViewRepresentable {
     let markdown: String
@@ -37,6 +38,7 @@ struct MarkdownWebView: NSViewRepresentable {
         config.userContentController.add(context.coordinator, name: "exportHTML")
         config.userContentController.add(context.coordinator, name: "copyGoogleDocs")
         config.userContentController.add(context.coordinator, name: "captureGif")
+        config.userContentController.add(context.coordinator, name: "saveDiagram")
         config.userContentController.add(context.coordinator, name: "editNote")
         config.userContentController.add(context.coordinator, name: "addNoteAtHeading")
         let webView = MarkdownWKWebView(frame: .zero, configuration: config)
@@ -166,7 +168,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
         let controller = webView.configuration.userContentController
-        for name in ["copyImage", "copyRendered", "copyGoogleDocs", "captureGif", "exportHTML", "editNote", "addNoteAtHeading"] {
+        for name in ["copyImage", "copyRendered", "copyGoogleDocs", "captureGif", "saveDiagram", "exportHTML", "editNote", "addNoteAtHeading"] {
             controller.removeScriptMessageHandler(forName: name)
         }
     }
@@ -216,6 +218,8 @@ struct MarkdownWebView: NSViewRepresentable {
                 handleCopyRendered(message)
             } else if message.name == "exportHTML" {
                 handleExportHTML(message)
+            } else if message.name == "saveDiagram" {
+                handleSaveDiagram(message)
             } else if message.name == "captureGif" {
                 if let dict = message.body as? [String: Any],
                    let webView = message.webView {
@@ -257,6 +261,23 @@ struct MarkdownWebView: NSViewRepresentable {
             pasteboard.setString(html, forType: .html)
             pasteboard.setString(html, forType: .string)
             onCopyDone?()
+        }
+
+        private func handleSaveDiagram(_ message: WKScriptMessage) {
+            guard let dataUrl = message.body as? String,
+                  let commaIndex = dataUrl.firstIndex(of: ",") else { return }
+            let base64 = String(dataUrl[dataUrl.index(after: commaIndex)...])
+            guard let data = Data(base64Encoded: base64) else { return }
+
+            DispatchQueue.main.async {
+                let panel = NSSavePanel()
+                panel.allowedContentTypes = [.png]
+                panel.nameFieldStringValue = "diagram.png"
+                panel.begin { response in
+                    guard response == .OK, let url = panel.url else { return }
+                    try? data.write(to: url)
+                }
+            }
         }
 
         private func handleCaptureGif(_ params: [String: Any], webView: WKWebView) {
