@@ -300,11 +300,21 @@
             var rect = svg.getBoundingClientRect();
             var w = Math.ceil(rect.width);
             var h = Math.ceil(rect.height);
+            // Use viewBox dimensions if larger than display size
+            var vb = svg.viewBox && svg.viewBox.baseVal;
+            if (vb && vb.width > 0 && vb.height > 0) {
+                w = Math.max(w, Math.ceil(vb.width));
+                h = Math.max(h, Math.ceil(vb.height));
+            }
             if (w === 0 || h === 0) { reject(new Error('zero size')); return; }
 
             var clone = svg.cloneNode(true);
             clone.setAttribute('width', w);
             clone.setAttribute('height', h);
+            // Ensure viewBox matches dimensions
+            if (!clone.getAttribute('viewBox')) {
+                clone.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+            }
 
             // Strip SMIL animations (they break canvas rendering of data URI SVGs)
             clone.querySelectorAll('animate, animateMotion, animateTransform, set').forEach(function(a) { a.remove(); });
