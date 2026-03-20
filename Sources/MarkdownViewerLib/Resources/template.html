@@ -299,39 +299,15 @@
 
     function svgToPngDataUrl(svg) {
         return new Promise(function(resolve, reject) {
-            // Get the true content size from all available sources
             var rect = svg.getBoundingClientRect();
             var w = Math.ceil(rect.width);
             var h = Math.ceil(rect.height);
-
-            // SVG attributes (mermaid sets these to the actual diagram size)
-            var attrW = parseFloat(svg.getAttribute('width')) || 0;
-            var attrH = parseFloat(svg.getAttribute('height')) || 0;
-            if (attrW > w) w = Math.ceil(attrW);
-            if (attrH > h) h = Math.ceil(attrH);
-
-            // viewBox (may be even larger)
-            var vb = svg.viewBox && svg.viewBox.baseVal;
-            if (vb && vb.width > 0 && vb.height > 0) {
-                if (vb.width > w) w = Math.ceil(vb.width);
-                if (vb.height > h) h = Math.ceil(vb.height);
-            }
-
             if (w === 0 || h === 0) { reject(new Error('zero size')); return; }
 
             var clone = svg.cloneNode(true);
-            // Preserve original viewBox if it exists (has correct content bounds)
-            // Set width/height to render at full size
-            if (vb && vb.width > 0) {
-                clone.setAttribute('width', Math.ceil(vb.width));
-                clone.setAttribute('height', Math.ceil(vb.height));
-                w = Math.ceil(vb.width);
-                h = Math.ceil(vb.height);
-            } else {
-                clone.setAttribute('width', w);
-                clone.setAttribute('height', h);
-                clone.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
-            }
+            clone.setAttribute('width', w);
+            clone.setAttribute('height', h);
+            clone.removeAttribute('style'); // Remove CSS constraints like max-width
 
             // Strip SMIL animations (they break canvas rendering of data URI SVGs)
             clone.querySelectorAll('animate, animateMotion, animateTransform, set').forEach(function(a) { a.remove(); });
