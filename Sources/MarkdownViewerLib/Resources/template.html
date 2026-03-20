@@ -401,76 +401,94 @@
             + '\n</article>\n</body>\n</html>';
     }
 
-    // Copy for Google Docs — Google Docs native clipboard format
-    async function copyForGoogleDocs() {
-        var clone = await prepareCleanContent();
-
-        // Strip classes/ids (Google Docs ignores them)
-        clone.querySelectorAll('[class],[id]').forEach(function(el) {
-            el.removeAttribute('class');
-            el.removeAttribute('id');
-        });
-
-        // Google Docs cell style
-        var cellBorder = 'border-left:solid #000 1pt;border-right:solid #000 1pt;border-bottom:solid #000 1pt;border-top:solid #000 1pt;vertical-align:top;padding:5pt 5pt 5pt 5pt;overflow:hidden;overflow-wrap:break-word';
-
-        clone.querySelectorAll('table').forEach(function(table) {
-            table.removeAttribute('border');
-            table.removeAttribute('cellpadding');
-            table.removeAttribute('cellspacing');
-            table.removeAttribute('width');
-            table.style.cssText = 'border:none;border-collapse:collapse';
-        });
-
-        // Headers: background on TD, text color via span with background-color:transparent
-        clone.querySelectorAll('th').forEach(function(th) {
-            var text = th.textContent;
-            var td = document.createElement('td');
-            td.style.cssText = cellBorder + ';background-color:' + thBgHex;
-            td.innerHTML = '<p dir="ltr" style="line-height:1.2;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:10pt;font-family:Arial,sans-serif;color:' + thColorHex + ';background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre-wrap;">' + escapeHtml(text) + '</span></p>';
-            th.parentNode.replaceChild(td, th);
-        });
-
-        // Regular cells: keep existing content (including images)
-        var processedCells = clone.querySelectorAll('td');
-        for (var ci = 0; ci < processedCells.length; ci++) {
-            var td = processedCells[ci];
-            if (td.style.cssText && td.style.cssText.indexOf('border-left') !== -1) continue;
-            td.style.cssText = cellBorder;
-        }
-
-        // Preserve images (don't wrap in spans)
-        clone.querySelectorAll('img').forEach(function(img) {
-            img.style.maxWidth = '100%';
-            img.removeAttribute('class');
-        });
-
-        // Headings
-        clone.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h) {
-            h.removeAttribute('style');
-            h.style.color = rgbToHex(h1Color);
-        });
-
-        // Code blocks
-        clone.querySelectorAll('pre').forEach(function(pre) {
-            pre.removeAttribute('style');
-            pre.style.cssText = 'background-color:#f6f8fa;padding:12px;font-family:monospace;font-size:12px';
-        });
-
-        // Blockquotes
-        clone.querySelectorAll('blockquote').forEach(function(bq) {
-            bq.removeAttribute('style');
-            bq.style.cssText = 'border-left:4px solid #ccc;padding-left:16px;margin-left:0;color:#555';
-        });
-
-        // Wrap in Google Docs envelope
-        var guid = 'xxxxxxxx-xxxx-4xxx'.replace(/x/g, function() { return (Math.random()*16|0).toString(16); });
-        var html = '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-' + guid + '">' + clone.innerHTML + '</b>';
-        postToHandler('copyGoogleDocs', html);
+    // Helper: rgb() to hex
+    function rgbToHex(rgb) {
+        if (!rgb || rgb.indexOf('rgb') === -1) return rgb || '#000000';
+        var parts = rgb.match(/\d+/g);
+        if (!parts || parts.length < 3) return rgb;
+        return '#' + parts.slice(0, 3).map(function(x) {
+            return ('0' + parseInt(x).toString(16)).slice(-2);
+        }).join('');
     }
 
     function escapeHtml(text) {
         return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // Copy for Google Docs — Google Docs native clipboard format
+    async function copyForGoogleDocs() {
+        try {
+            var clone = await prepareCleanContent();
+            var content = document.getElementById('content');
+
+            // Sample colors from live DOM
+            function cs(sel) {
+                var el = content.querySelector(sel);
+                return el ? window.getComputedStyle(el) : {};
+            }
+            var thBg = rgbToHex((cs('th') || {}).backgroundColor || '#f6f8fa');
+            var thColor = rgbToHex((cs('th') || {}).color || '#000000');
+            var hColor = rgbToHex((cs('h1') || {}).color || '#000000');
+
+            // Strip classes/ids
+            clone.querySelectorAll('[class],[id]').forEach(function(el) {
+                el.removeAttribute('class');
+                el.removeAttribute('id');
+            });
+
+            var cellBorder = 'border-left:solid #000 1pt;border-right:solid #000 1pt;border-bottom:solid #000 1pt;border-top:solid #000 1pt;vertical-align:top;padding:5pt 5pt 5pt 5pt;overflow:hidden;overflow-wrap:break-word';
+
+            clone.querySelectorAll('table').forEach(function(table) {
+                table.removeAttribute('border');
+                table.removeAttribute('cellpadding');
+                table.removeAttribute('cellspacing');
+                table.removeAttribute('width');
+                table.style.cssText = 'border:none;border-collapse:collapse';
+            });
+
+            clone.querySelectorAll('th').forEach(function(th) {
+                var text = th.textContent;
+                var td = document.createElement('td');
+                td.style.cssText = cellBorder + ';background-color:' + thBg;
+                td.innerHTML = '<p dir="ltr" style="line-height:1.2;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:10pt;font-family:Arial,sans-serif;color:' + thColor + ';background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre-wrap;">' + escapeHtml(text) + '</span></p>';
+                th.parentNode.replaceChild(td, th);
+            });
+
+            var allTds = clone.querySelectorAll('td');
+            for (var ci = 0; ci < allTds.length; ci++) {
+                var td = allTds[ci];
+                if (td.style.cssText && td.style.cssText.indexOf('border-left') !== -1) continue;
+                td.style.cssText = cellBorder;
+            }
+
+            clone.querySelectorAll('img').forEach(function(img) {
+                img.style.maxWidth = '100%';
+            });
+
+            clone.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h) {
+                h.removeAttribute('style');
+                h.style.color = hColor;
+            });
+
+            clone.querySelectorAll('pre').forEach(function(pre) {
+                pre.removeAttribute('style');
+                pre.style.cssText = 'background-color:#f6f8fa;padding:12px;font-family:monospace;font-size:12px';
+            });
+
+            clone.querySelectorAll('blockquote').forEach(function(bq) {
+                bq.removeAttribute('style');
+                bq.style.cssText = 'border-left:4px solid #ccc;padding-left:16px;margin-left:0;color:#555';
+            });
+
+            var guid = 'xxxxxxxx-xxxx-4xxx'.replace(/x/g, function() { return (Math.random()*16|0).toString(16); });
+            var html = '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-' + guid + '">' + clone.innerHTML + '</b>';
+            postToHandler('copyGoogleDocs', html);
+        } catch(e) {
+            console.error('GDoc copy error:', e);
+            // Fallback: copy plain innerHTML
+            var fallback = document.getElementById('content').innerHTML;
+            postToHandler('copyGoogleDocs', fallback);
+        }
     }
 
     function postToHandler(name, body) {

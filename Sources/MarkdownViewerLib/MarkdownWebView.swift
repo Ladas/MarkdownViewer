@@ -119,7 +119,7 @@ struct MarkdownWebView: NSViewRepresentable {
         if gDocsChanged {
             coord.lastCopyGDocsTrigger = copyGDocsTrigger
             guard coord.pageLoaded else { return }
-            webView.evaluateJavaScript("copyForGoogleDocs()") { _, _ in }
+            webView.evaluateJavaScript("copyForGoogleDocs().catch(function(e){console.error('GDoc copy error:',e)})") { _, _ in }
         }
 
         let exportChanged = coord.lastExportHTMLTrigger != exportHTMLTrigger
