@@ -401,11 +401,64 @@
             + '\n</article>\n</body>\n</html>';
     }
 
-    // Copy just the styled innerHTML fragment for Google Docs
+    // Copy in Google Docs native clipboard format
     async function copyForGoogleDocs() {
         var clone = await prepareCleanContent();
-        // Google Docs only needs the fragment, no <html>/<style> wrapper
-        postToHandler('copyGoogleDocs', clone.innerHTML);
+        var content = clone;
+
+        // Transform tables to Google Docs format
+        content.querySelectorAll('table').forEach(function(table) {
+            table.removeAttribute('border');
+            table.removeAttribute('cellpadding');
+            table.removeAttribute('cellspacing');
+            table.removeAttribute('width');
+            table.style.cssText = 'border:none;border-collapse:collapse;width:100%;table-layout:auto';
+        });
+
+        var cellBorder = 'border-left:solid #bdbdbd 0.75pt;border-right:solid #bdbdbd 0.75pt;border-top:solid #bdbdbd 0.75pt;border-bottom:solid #bdbdbd 0.75pt';
+
+        content.querySelectorAll('th').forEach(function(th) {
+            var bgHex = th.getAttribute('bgcolor') || thBgHex || '#f6f8fa';
+            var colorHex = thColorHex || '#000000';
+            th.removeAttribute('bgcolor');
+            th.style.cssText = cellBorder + ';vertical-align:top;padding:5pt 5pt 5pt 5pt;background-color:' + bgHex;
+            // Wrap text in Google Docs format span
+            var text = th.textContent;
+            th.innerHTML = '<p dir="ltr" style="line-height:1.2;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:10pt;font-family:Arial,sans-serif;color:' + colorHex + ';background-color:' + bgHex + ';font-weight:700;white-space:pre-wrap;">' + escapeHtml(text) + '</span></p>';
+        });
+
+        content.querySelectorAll('td').forEach(function(td) {
+            td.style.cssText = cellBorder + ';vertical-align:top;padding:5pt 5pt 5pt 5pt';
+            // Wrap each text node/inline in a Google Docs span
+            var html = td.innerHTML;
+            if (!html.match(/<p[\s>]/)) {
+                td.innerHTML = '<p dir="ltr" style="line-height:1.2;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:10pt;font-family:Arial,sans-serif;color:#000000;background-color:transparent;font-weight:400;white-space:pre-wrap;">' + html + '</span></p>';
+            }
+        });
+
+        // Strip all class attributes (Google Docs doesn't need them)
+        content.querySelectorAll('[class]').forEach(function(el) {
+            el.removeAttribute('class');
+        });
+
+        // Wrap headings in Google Docs format
+        content.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h) {
+            var text = h.textContent;
+            var sizes = {H1:'18pt',H2:'14pt',H3:'12pt',H4:'11pt',H5:'10pt',H6:'9pt'};
+            var size = sizes[h.tagName] || '11pt';
+            h.innerHTML = '<span style="font-size:' + size + ';font-family:Arial,sans-serif;color:' + rgbToHex(h1Color) + ';background-color:transparent;font-weight:700;white-space:pre-wrap;">' + escapeHtml(text) + '</span>';
+            h.style.backgroundColor = 'transparent';
+        });
+
+        // Wrap in Google Docs clipboard wrapper
+        var guid = 'xxxxxxxx'.replace(/x/g, function() { return (Math.random()*16|0).toString(16); });
+        var html = '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-' + guid + '">' + content.innerHTML + '</b>';
+
+        postToHandler('copyGoogleDocs', html);
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
     function postToHandler(name, body) {
