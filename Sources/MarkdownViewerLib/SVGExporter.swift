@@ -29,34 +29,22 @@ public final class SVGExporter: NSObject, WKNavigationDelegate {
         self.completion = completion
 
         if !animated {
-            // Static: try resvg first
+            // Static: resvg
             if ResvgRenderer.isAvailable {
                 if let data = ResvgRenderer.renderToPNG(svgString: svgString, width: width) {
                     completion(.png(data))
                     return
                 }
             }
-            // Fallback: render in hidden WebView and snapshot once
-            captureStaticFrame(width: width)
+            completion(.error("resvg not installed. Run: brew install resvg"))
+            return
         } else {
             // Animated: capture frames via hidden WKWebView
             captureAnimatedFrames(width: width)
         }
     }
 
-    // MARK: - Static capture (single frame)
-
-    private func captureStaticFrame(width: Int) {
-        let html = wrapSVGInHTML(svgString)
-        let config = WKWebViewConfiguration()
-        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: width, height: 400), configuration: config)
-        wv.navigationDelegate = self
-        self.webView = wv
-        self.svgSize = CGSize(width: width, height: 400)
-        wv.loadHTMLString(html, baseURL: nil)
-    }
-
-    // MARK: - Animated capture (multiple frames)
+    // MARK: - Animated capture (multiple frames via hidden WKWebView)
 
     private func captureAnimatedFrames(width: Int) {
         let html = wrapSVGInHTML(svgString)
@@ -83,35 +71,8 @@ public final class SVGExporter: NSObject, WKNavigationDelegate {
             }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                if self.isAnimated {
-                    self.captureFrame(index: 0)
-                } else {
-                    self.snapshotAndFinish()
-                }
+                self.captureFrame(index: 0)
             }
-        }
-    }
-
-    private func snapshotAndFinish() {
-        guard let wv = webView else { return }
-        let config = WKSnapshotConfiguration()
-        config.rect = CGRect(origin: .zero, size: svgSize)
-
-        wv.takeSnapshot(with: config) { [weak self] image, error in
-            guard let self = self, let image = image,
-                  let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-                self?.completion?(.error("Snapshot failed"))
-                self?.cleanup()
-                return
-            }
-
-            let rep = NSBitmapImageRep(cgImage: cgImage)
-            if let pngData = rep.representation(using: .png, properties: [:]) {
-                self.completion?(.png(pngData))
-            } else {
-                self.completion?(.error("PNG encoding failed"))
-            }
-            self.cleanup()
         }
     }
 

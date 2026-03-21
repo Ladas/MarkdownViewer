@@ -440,10 +440,7 @@
                         postToHandler('copyImage', dataUrl);
                         gifBtn.textContent = 'Copied!';
                     } else {
-                        svgToPngDataUrl(svg).then(function(pngUrl) {
-                            postToHandler('copyImage', pngUrl);
-                            gifBtn.textContent = 'PNG';
-                        });
+                        gifBtn.textContent = 'Failed';
                     }
                     setTimeout(function() { gifBtn.textContent = 'GIF'; }, 1500);
                 });
@@ -543,12 +540,8 @@
                 if (svgClone.closest('.mermaid-container') || svgClone.closest('pre.mermaid')) continue;
                 try {
                     var origSvg = (si < origSvgs.length) ? origSvgs[si] : svgClone;
-                    // Try Swift renderer (resvg for static, hidden WKWebView for animated)
+                    // Swift renderer: resvg for static, hidden WKWebView for animated
                     var dataUrl = await renderSvgViaSwift(origSvg);
-                    if (!dataUrl) {
-                        // Fallback to canvas-based rendering
-                        dataUrl = await svgToPngDataUrl(origSvg);
-                    }
                     var img = document.createElement('img');
                     img.src = dataUrl;
                     img.style.maxWidth = '100%';
