@@ -6,8 +6,12 @@
 
 #### Claude Chat Panel
 - Integrated chat panel (Cmd+Shift+K) powered by Claude CLI (`claude -p`)
+- **Typing animation** — response text is revealed progressively with a typing effect (Claude CLI buffers full responses; the app animates them for a smooth UX)
+- **stream-json event parsing** — correctly handles Claude CLI `assistant` and `system` events for text extraction and early session ID capture
+- **Model picker** — switch between Sonnet, Opus, Haiku, or enter a custom model ID; takes effect immediately
 - Per-file chat sessions with automatic `--resume` for conversation continuity
-- Streaming responses rendered as markdown in a WKWebView
+- Responses rendered as markdown in a WKWebView
+- **Automatic `claude` binary resolution** — finds the CLI in common install locations (`~/.npm-global/bin/`, `/usr/local/bin/`, `/opt/homebrew/bin/`) without relying on shell PATH
 - "Allow editing" toggle — when enabled, Claude can edit files (`--dangerously-skip-permissions`); when disabled, write tools are blocked (`--disallowedTools`)
 - Session ID displayed in the status bar (first 8 chars, full UUID on hover)
 - Working directory shown in status bar with click-to-change via directory picker
@@ -39,3 +43,10 @@
 - Larger default chat panel height (400px, expandable to 1200px)
 - Chat input field expands up to 15 lines for longer prompts
 - Comments panel count badge includes both review notes and inline comments
+
+### Tests
+
+- `InlineCommentTests` — model encoding/decoding, store CRUD (append, delete, update, save), sidecar file naming
+- `ChatMessageTests` — message model encoding/decoding, role raw values
+- `ChatHistoryManagerTests` — file key determinism, session ID persistence and reset, append/load/save/clear, `.claude-chat/` directory creation
+- `ClaudeCLIRunnerTests` — git root discovery, initialization, cancel when not running, claude path resolution
