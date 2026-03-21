@@ -253,6 +253,28 @@
         return new Uint8Array(buf);
     }
 
+    // Render SVG via Swift (resvg for static, hidden WKWebView for animated)
+    window._svgRenderCallbacks = {};
+    function renderSvgViaSwift(svg) {
+        return new Promise(function(resolve) {
+            var animated = svgHasAnimation(svg);
+            var svgMarkup = new XMLSerializer().serializeToString(svg);
+            var id = 'svg_' + Math.random().toString(36).substr(2, 9);
+            window._svgRenderCallbacks[id] = function(dataUrl) {
+                delete window._svgRenderCallbacks[id];
+                resolve(dataUrl); // null if failed
+            };
+            postToHandler('renderSvgResvg', { svg: svgMarkup, animated: animated, id: id });
+            // Timeout: 30s
+            setTimeout(function() {
+                if (window._svgRenderCallbacks[id]) {
+                    delete window._svgRenderCallbacks[id];
+                    resolve(null);
+                }
+            }, 30000);
+        });
+    }
+
     // Request animated SVG → GIF capture from Swift (WKWebView.takeSnapshot)
     function requestGifCapture(svg) {
         return new Promise(function(resolve, reject) {
@@ -413,17 +435,17 @@
             gifBtn.onclick = function(e) {
                 e.stopPropagation();
                 gifBtn.textContent = 'Capturing...';
-                requestGifCapture(svg).then(function(gifUrl) {
-                    postToHandler('copyImage', gifUrl);
-                    gifBtn.textContent = 'Copied!';
+                renderSvgViaSwift(svg).then(function(dataUrl) {
+                    if (dataUrl) {
+                        postToHandler('copyImage', dataUrl);
+                        gifBtn.textContent = 'Copied!';
+                    } else {
+                        svgToPngDataUrl(svg).then(function(pngUrl) {
+                            postToHandler('copyImage', pngUrl);
+                            gifBtn.textContent = 'PNG';
+                        });
+                    }
                     setTimeout(function() { gifBtn.textContent = 'GIF'; }, 1500);
-                }).catch(function() {
-                    // Fallback to PNG
-                    svgToPngDataUrl(svg).then(function(pngUrl) {
-                        postToHandler('copyImage', pngUrl);
-                        gifBtn.textContent = 'PNG copied';
-                        setTimeout(function() { gifBtn.textContent = 'GIF'; }, 1500);
-                    });
                 });
             };
             btnGroup.appendChild(gifBtn);
@@ -521,16 +543,10 @@
                 if (svgClone.closest('.mermaid-container') || svgClone.closest('pre.mermaid')) continue;
                 try {
                     var origSvg = (si < origSvgs.length) ? origSvgs[si] : svgClone;
-                    var dataUrl;
-                    if (svgHasAnimation(origSvg)) {
-                        // Animated SVG → GIF via Swift snapshots
-                        try {
-                            dataUrl = await requestGifCapture(origSvg);
-                        } catch(e) {
-                            // Fallback to static PNG
-                            dataUrl = await svgToPngDataUrl(origSvg);
-                        }
-                    } else {
+                    // Try Swift renderer (resvg for static, hidden WKWebView for animated)
+                    var dataUrl = await renderSvgViaSwift(origSvg);
+                    if (!dataUrl) {
+                        // Fallback to canvas-based rendering
                         dataUrl = await svgToPngDataUrl(origSvg);
                     }
                     var img = document.createElement('img');

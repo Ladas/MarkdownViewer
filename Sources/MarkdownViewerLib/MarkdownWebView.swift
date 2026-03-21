@@ -38,6 +38,7 @@ struct MarkdownWebView: NSViewRepresentable {
         config.userContentController.add(context.coordinator, name: "exportHTML")
         config.userContentController.add(context.coordinator, name: "copyGoogleDocs")
         config.userContentController.add(context.coordinator, name: "captureGif")
+        config.userContentController.add(context.coordinator, name: "renderSvgResvg")
         config.userContentController.add(context.coordinator, name: "saveDiagram")
         config.userContentController.add(context.coordinator, name: "editNote")
         config.userContentController.add(context.coordinator, name: "addNoteAtHeading")
@@ -168,7 +169,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
         let controller = webView.configuration.userContentController
-        for name in ["copyImage", "copyRendered", "copyGoogleDocs", "captureGif", "saveDiagram", "exportHTML", "editNote", "addNoteAtHeading"] {
+        for name in ["copyImage", "copyRendered", "copyGoogleDocs", "captureGif", "renderSvgResvg", "saveDiagram", "exportHTML", "editNote", "addNoteAtHeading"] {
             controller.removeScriptMessageHandler(forName: name)
         }
     }
@@ -220,6 +221,8 @@ struct MarkdownWebView: NSViewRepresentable {
                 handleExportHTML(message)
             } else if message.name == "saveDiagram" {
                 handleSaveDiagram(message)
+            } else if message.name == "renderSvgResvg" {
+                handleRenderSvg(message)
             } else if message.name == "captureGif" {
                 if let dict = message.body as? [String: Any],
                    let webView = message.webView {
@@ -261,6 +264,36 @@ struct MarkdownWebView: NSViewRepresentable {
             pasteboard.setString(html, forType: .html)
             pasteboard.setString(html, forType: .string)
             onCopyDone?()
+        }
+
+        private var svgExporter: SVGExporter?
+
+        private func handleRenderSvg(_ message: WKScriptMessage) {
+            guard let dict = message.body as? [String: Any],
+                  let svgMarkup = dict["svg"] as? String,
+                  let animated = dict["animated"] as? Bool,
+                  let callbackId = dict["id"] as? String,
+                  let sourceWebView = message.webView else { return }
+
+            let exporter = SVGExporter()
+            self.svgExporter = exporter // retain
+
+            exporter.export(svgString: svgMarkup, animated: animated) { [weak self] result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .png(let data):
+                        let dataUrl = "data:image/png;base64," + data.base64EncodedString()
+                        sourceWebView.evaluateJavaScript("window._svgRenderCallbacks && window._svgRenderCallbacks['\(callbackId)'] && window._svgRenderCallbacks['\(callbackId)']('\(dataUrl)')") { _, _ in }
+                    case .gif(let data):
+                        let dataUrl = "data:image/gif;base64," + data.base64EncodedString()
+                        sourceWebView.evaluateJavaScript("window._svgRenderCallbacks && window._svgRenderCallbacks['\(callbackId)'] && window._svgRenderCallbacks['\(callbackId)']('\(dataUrl)')") { _, _ in }
+                    case .error(let msg):
+                        print("SVG render error: \(msg)")
+                        sourceWebView.evaluateJavaScript("window._svgRenderCallbacks && window._svgRenderCallbacks['\(callbackId)'] && window._svgRenderCallbacks['\(callbackId)'](null)") { _, _ in }
+                    }
+                    self?.svgExporter = nil
+                }
+            }
         }
 
         private func handleSaveDiagram(_ message: WKScriptMessage) {
