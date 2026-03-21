@@ -190,9 +190,10 @@ public struct ContentView: View {
     @State private var appearanceMode = "auto"
     @State private var contentWidth: Double = 980
     @State private var viewMode: ViewMode = .preview
-    @State private var mermaidTheme: MermaidTheme = MermaidThemeManager.loadThemes()[0]
+    private static let cachedThemes = MermaidThemeManager.loadThemes()
+    @State private var mermaidTheme: MermaidTheme = cachedThemes[0]
     @State private var themeVersion: Int = 0
-    @State private var availableThemes: [MermaidTheme] = MermaidThemeManager.loadThemes()
+    @State private var availableThemes: [MermaidTheme] = cachedThemes
     @State private var showComments = false
     @State private var resolvedNotes: [ResolvedBatch] = []
     @State private var previousNotes: [String] = []

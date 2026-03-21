@@ -1,6 +1,5 @@
 import AppKit
 import WebKit
-import UniformTypeIdentifiers
 
 /// Exports SVGs to PNG (via resvg) or animated GIF (via hidden WKWebView snapshots)
 public final class SVGExporter: NSObject, WKNavigationDelegate {
@@ -13,8 +12,6 @@ public final class SVGExporter: NSObject, WKNavigationDelegate {
 
     private var webView: WKWebView?
     private var completion: ((ExportResult) -> Void)?
-    private var svgString: String = ""
-    private var isAnimated: Bool = false
     private var frameCount: Int = 12
     private var fps: Double = 6
     private var capturedFrames: [CGImage] = []
@@ -24,8 +21,6 @@ public final class SVGExporter: NSObject, WKNavigationDelegate {
     /// - Static SVGs: uses resvg (high quality) with canvas fallback
     /// - Animated SVGs: uses hidden WKWebView frame capture → GIF
     public func export(svgString: String, animated: Bool, width: Int = 600, completion: @escaping (ExportResult) -> Void) {
-        self.svgString = svgString
-        self.isAnimated = animated
         self.completion = completion
 
         if !animated {
@@ -33,20 +28,22 @@ public final class SVGExporter: NSObject, WKNavigationDelegate {
             if ResvgRenderer.isAvailable {
                 if let data = ResvgRenderer.renderToPNG(svgString: svgString, width: width) {
                     completion(.png(data))
+                    self.completion = nil
                     return
                 }
             }
             completion(.error("resvg not installed. Run: brew install resvg"))
+            self.completion = nil
             return
         } else {
             // Animated: capture frames via hidden WKWebView
-            captureAnimatedFrames(width: width)
+            captureAnimatedFrames(svgString: svgString, width: width)
         }
     }
 
     // MARK: - Animated capture (multiple frames via hidden WKWebView)
 
-    private func captureAnimatedFrames(width: Int) {
+    private func captureAnimatedFrames(svgString: String, width: Int) {
         let html = wrapSVGInHTML(svgString)
         let config = WKWebViewConfiguration()
         let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: width, height: 400), configuration: config)
@@ -87,11 +84,12 @@ public final class SVGExporter: NSObject, WKNavigationDelegate {
         config.rect = CGRect(origin: .zero, size: svgSize)
 
         wv.takeSnapshot(with: config) { [weak self] image, error in
-            guard let self = self, let image = image,
+            guard let self = self else { return }
+            guard let image = image,
                   let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
                 // Skip failed frame
-                DispatchQueue.main.asyncAfter(deadline: .now() + (1.0 / self!.fps)) {
-                    self?.captureFrame(index: index + 1)
+                DispatchQueue.main.asyncAfter(deadline: .now() + (1.0 / self.fps)) {
+                    self.captureFrame(index: index + 1)
                 }
                 return
             }

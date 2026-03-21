@@ -42,18 +42,6 @@ public enum ResvgRenderer {
         return try? Data(contentsOf: pngFile)
     }
 
-    /// Render SVG string to NSImage using resvg
-    public static func renderToImage(svgString: String, width: Int? = nil) -> NSImage? {
-        guard let data = renderToPNG(svgString: svgString, width: width) else { return nil }
-        return NSImage(data: data)
-    }
-
-    /// Render SVG string to base64 data URL
-    public static func renderToDataURL(svgString: String, width: Int? = nil) -> String? {
-        guard let data = renderToPNG(svgString: svgString, width: width) else { return nil }
-        return "data:image/png;base64," + data.base64EncodedString()
-    }
-
     // MARK: - Private
 
     private static let resvgPath: String = {
