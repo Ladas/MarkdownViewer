@@ -20,13 +20,16 @@ public final class SVGExporter: NSObject, WKNavigationDelegate {
     /// Export SVG to the best available format
     /// - Static SVGs: uses resvg (high quality) with canvas fallback
     /// - Animated SVGs: uses hidden WKWebView frame capture → GIF
+    private static let maxDimension = 4096
+
     public func export(svgString: String, animated: Bool, width: Int = 600, completion: @escaping (ExportResult) -> Void) {
+        let cappedWidth = min(width, Self.maxDimension)
         self.completion = completion
 
         if !animated {
             // Static: resvg
             if ResvgRenderer.isAvailable {
-                if let data = ResvgRenderer.renderToPNG(svgString: svgString, width: width) {
+                if let data = ResvgRenderer.renderToPNG(svgString: svgString, width: cappedWidth) {
                     completion(.png(data))
                     self.completion = nil
                     return
@@ -37,7 +40,7 @@ public final class SVGExporter: NSObject, WKNavigationDelegate {
             return
         } else {
             // Animated: capture frames via hidden WKWebView
-            captureAnimatedFrames(svgString: svgString, width: width)
+            captureAnimatedFrames(svgString: svgString, width: cappedWidth)
         }
     }
 
@@ -145,12 +148,18 @@ public final class SVGExporter: NSObject, WKNavigationDelegate {
     }
 
     private func wrapSVGInHTML(_ svg: String) -> String {
-        """
+        // Sanitize: strip script tags and event handlers from SVG
+        let sanitized = svg
+            .replacingOccurrences(of: "<script[^>]*>[\\s\\S]*?</script>", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "\\son\\w+\\s*=\\s*\"[^\"]*\"", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "\\son\\w+\\s*=\\s*'[^']*'", with: "", options: .regularExpression)
+        return """
         <!DOCTYPE html>
         <html><head>
         <meta charset="utf-8">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;">
         <style>body{margin:0;padding:0;background:#fff;overflow:hidden}svg{display:block}</style>
-        </head><body>\(svg)</body></html>
+        </head><body>\(sanitized)</body></html>
         """
     }
 }

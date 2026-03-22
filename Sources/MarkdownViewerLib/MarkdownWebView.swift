@@ -275,20 +275,32 @@ struct MarkdownWebView: NSViewRepresentable {
                   let callbackId = dict["id"] as? String,
                   let sourceWebView = message.webView else { return }
 
+            // Validate callbackId to prevent JS injection (Finding #1)
+            let idRange = callbackId.range(of: "^svg_[a-z0-9]{1,20}$", options: .regularExpression)
+            guard idRange != nil else { return }
+
             let exporter = SVGExporter()
-            self.svgExporter = exporter // retain
+            self.svgExporter = exporter
 
             exporter.export(svgString: svgMarkup, animated: animated) { [weak self] result in
                 DispatchQueue.main.async {
+                    let dataUrl: String?
                     switch result {
                     case .png(let data):
-                        let dataUrl = "data:image/png;base64," + data.base64EncodedString()
-                        sourceWebView.evaluateJavaScript("window._svgRenderCallbacks && window._svgRenderCallbacks['\(callbackId)'] && window._svgRenderCallbacks['\(callbackId)']('\(dataUrl)')") { _, _ in }
+                        dataUrl = "data:image/png;base64," + data.base64EncodedString()
                     case .gif(let data):
-                        let dataUrl = "data:image/gif;base64," + data.base64EncodedString()
-                        sourceWebView.evaluateJavaScript("window._svgRenderCallbacks && window._svgRenderCallbacks['\(callbackId)'] && window._svgRenderCallbacks['\(callbackId)']('\(dataUrl)')") { _, _ in }
+                        dataUrl = "data:image/gif;base64," + data.base64EncodedString()
                     case .error(let msg):
                         print("SVG render error: \(msg)")
+                        dataUrl = nil
+                    }
+
+                    // Use JSON encoding for safe callback invocation
+                    if let url = dataUrl,
+                       let jsonData = try? JSONSerialization.data(withJSONObject: url),
+                       let jsonStr = String(data: jsonData, encoding: .utf8) {
+                        sourceWebView.evaluateJavaScript("window._svgRenderCallbacks && window._svgRenderCallbacks['\(callbackId)'] && window._svgRenderCallbacks['\(callbackId)'](\(jsonStr))") { _, _ in }
+                    } else {
                         sourceWebView.evaluateJavaScript("window._svgRenderCallbacks && window._svgRenderCallbacks['\(callbackId)'] && window._svgRenderCallbacks['\(callbackId)'](null)") { _, _ in }
                     }
                     self?.svgExporter = nil
