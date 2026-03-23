@@ -612,7 +612,7 @@
             th.style.cssText = 'padding:8px 12px;font-weight:600;text-align:left;color:' + thColorHex + ';background-color:' + thBgHex;
         });
         clone.querySelectorAll('td').forEach(function(td) {
-            td.style.cssText = 'padding:8px 12px;text-align:left;vertical-align:top';
+            td.style.cssText = 'padding:8px 12px;text-align:left;vertical-align:top;background-color:transparent';
         });
         clone.querySelectorAll('pre').forEach(function(pre) {
             if (pre.classList.contains('mermaid')) return;
@@ -655,6 +655,20 @@
         clone.querySelectorAll('a').forEach(function(a) {
             a.style.color = linkColor;
             a.style.backgroundColor = 'transparent';
+        });
+
+        // Force transparent text backgrounds on all text elements
+        // (prevents white rectangles behind text after paste)
+        clone.querySelectorAll('p, span, strong, em, b, i, li, dt, dd').forEach(function(el) {
+            el.style.backgroundColor = 'transparent';
+        });
+        // Mermaid SVG text elements — transparent background
+        clone.querySelectorAll('svg text, svg .label, svg .edgeLabel, svg .nodeLabel, svg foreignObject div, svg foreignObject span, svg foreignObject p').forEach(function(el) {
+            if (el.tagName === 'text') {
+                // SVG text doesn't use backgroundColor
+            } else {
+                el.style.backgroundColor = 'transparent';
+            }
         });
 
         clone.normalize();
