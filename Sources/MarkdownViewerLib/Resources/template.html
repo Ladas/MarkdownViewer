@@ -356,25 +356,54 @@
             clone.querySelectorAll('foreignObject').forEach(function(fo) {
                 var foRect = { x: parseFloat(fo.getAttribute('x')) || 0, y: parseFloat(fo.getAttribute('y')) || 0,
                                w: parseFloat(fo.getAttribute('width')) || 100, h: parseFloat(fo.getAttribute('height')) || 20 };
-                // Get all text content, split by <br>
-                var textContent = fo.textContent.trim();
+                // Extract text, splitting on <br> elements
+                var html = fo.innerHTML;
+                // Replace <br>, <br/>, <br /> with newline marker
+                var textWithBreaks = html.replace(/<br\s*\/?>/gi, '\n');
+                // Strip remaining HTML tags
+                var tmp = document.createElement('div');
+                tmp.innerHTML = textWithBreaks;
+                var textContent = tmp.textContent.trim();
                 if (!textContent) { fo.remove(); return; }
 
-                var lines = textContent.split(/\n/);
-                var fontSize = 12;
-                var lineHeight = fontSize * 1.3;
-                var startY = foRect.y + foRect.h / 2 - (lines.length - 1) * lineHeight / 2;
+                var lines = textContent.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+                var fontSize = 11;
+                var charWidth = fontSize * 0.6;
+                var maxCharsPerLine = Math.floor(foRect.w / charWidth) || 20;
+                var lineHeight = fontSize * 1.4;
+
+                // Word-wrap long lines
+                var wrappedLines = [];
+                lines.forEach(function(line) {
+                    if (line.length <= maxCharsPerLine) {
+                        wrappedLines.push(line);
+                    } else {
+                        var words = line.split(/\s+/);
+                        var current = '';
+                        words.forEach(function(word) {
+                            if (current.length + word.length + 1 > maxCharsPerLine && current.length > 0) {
+                                wrappedLines.push(current);
+                                current = word;
+                            } else {
+                                current = current ? current + ' ' + word : word;
+                            }
+                        });
+                        if (current) wrappedLines.push(current);
+                    }
+                });
+
+                var totalHeight = wrappedLines.length * lineHeight;
+                var startY = foRect.y + (foRect.h - totalHeight) / 2 + lineHeight * 0.7;
 
                 var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-                lines.forEach(function(line, i) {
+                wrappedLines.forEach(function(line, i) {
                     var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                     text.setAttribute('x', foRect.x + foRect.w / 2);
                     text.setAttribute('y', startY + i * lineHeight);
                     text.setAttribute('text-anchor', 'middle');
-                    text.setAttribute('dominant-baseline', 'central');
                     text.setAttribute('font-family', '-apple-system, sans-serif');
                     text.setAttribute('font-size', fontSize);
-                    text.textContent = line.trim();
+                    text.textContent = line;
                     g.appendChild(text);
                 });
                 fo.parentNode.replaceChild(g, fo);
