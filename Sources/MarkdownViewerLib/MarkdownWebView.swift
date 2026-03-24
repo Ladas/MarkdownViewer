@@ -4,6 +4,7 @@ import AppKit
 
 struct MarkdownWebView: NSViewRepresentable {
     let markdown: String
+    var fileURL: URL?
     var overrideHTML: String?
     var searchText: String = ""
     var navigationTrigger: Int = 0
@@ -39,9 +40,11 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.allowsMagnification = true
         context.coordinator.lastMarkdown = markdown
         context.coordinator.lastOverrideHTML = overrideHTML
+        context.coordinator.fileURL = fileURL
 
+        let baseURL = fileURL?.deletingLastPathComponent()
         let html = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
-        webView.loadHTMLString(html, baseURL: nil)
+        webView.loadHTMLString(html, baseURL: baseURL)
         return webView
     }
 
@@ -56,6 +59,9 @@ struct MarkdownWebView: NSViewRepresentable {
         coord.onExplainWithClaude = onExplainWithClaude
         coord.onAskClaude = onAskClaude
 
+        coord.fileURL = fileURL
+        let baseURL = fileURL?.deletingLastPathComponent()
+
         let contentChanged = coord.lastMarkdown != markdown || coord.lastOverrideHTML != overrideHTML
         if contentChanged {
             coord.lastMarkdown = markdown
@@ -66,7 +72,7 @@ struct MarkdownWebView: NSViewRepresentable {
             // Save scroll position before reload, restore in didFinish
             webView.evaluateJavaScript("window.scrollY") { result, _ in
                 coord.savedScrollY = result as? Double ?? 0
-                webView.loadHTMLString(htmlToLoad, baseURL: nil)
+                webView.loadHTMLString(htmlToLoad, baseURL: baseURL)
             }
             return
         }
@@ -121,7 +127,7 @@ struct MarkdownWebView: NSViewRepresentable {
                 let htmlToLoad = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
                 webView.evaluateJavaScript("window.scrollY") { result, _ in
                     coord.savedScrollY = result as? Double ?? 0
-                    webView.loadHTMLString(htmlToLoad, baseURL: nil)
+                    webView.loadHTMLString(htmlToLoad, baseURL: baseURL)
                 }
             }
         }
@@ -147,7 +153,9 @@ struct MarkdownWebView: NSViewRepresentable {
 
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         private static let allowedSchemes: Set<String> = ["http", "https", "mailto"]
+        private static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn"]
 
+        var fileURL: URL?
         var lastMarkdown: String?
         var lastOverrideHTML: String?
         var lastSearchText: String?
@@ -294,8 +302,38 @@ struct MarkdownWebView: NSViewRepresentable {
         ) {
             if navigationAction.navigationType == .linkActivated,
                let url = navigationAction.request.url {
-                if let scheme = url.scheme?.lowercased(),
-                   Self.allowedSchemes.contains(scheme) {
+                let scheme = url.scheme?.lowercased() ?? ""
+
+                // Handle local markdown file links — open as new document tab
+                if scheme == "file" || scheme.isEmpty {
+                    let resolved: URL
+                    if scheme == "file" {
+                        resolved = url
+                    } else if let base = fileURL?.deletingLastPathComponent() {
+                        resolved = base.appendingPathComponent(url.path)
+                    } else {
+                        decisionHandler(.cancel)
+                        return
+                    }
+                    let ext = resolved.pathExtension.lowercased()
+                    if Self.markdownExtensions.contains(ext),
+                       FileManager.default.fileExists(atPath: resolved.path) {
+                        let sourceWindow = webView.window
+                        let existingWindows = Set(NSApp.windows)
+                        NSDocumentController.shared.openDocument(
+                            withContentsOf: resolved, display: true
+                        ) { _, _, _ in
+                            // Move the new window into the source window as a tab
+                            guard let sourceWindow = sourceWindow else { return }
+                            if let newWindow = NSApp.windows.first(where: {
+                                !existingWindows.contains($0) && $0 !== sourceWindow
+                            }) {
+                                sourceWindow.addTabbedWindow(newWindow, ordered: .above)
+                                newWindow.makeKeyAndOrderFront(nil)
+                            }
+                        }
+                    }
+                } else if Self.allowedSchemes.contains(scheme) {
                     NSWorkspace.shared.open(url)
                 }
                 decisionHandler(.cancel)
