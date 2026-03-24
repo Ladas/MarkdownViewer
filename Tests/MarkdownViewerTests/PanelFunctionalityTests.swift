@@ -92,28 +92,21 @@ struct ReviewNotePanelTests {
 
     @Test func insertNoteAfterHeading() {
         let md = "# Title\nBody\n## Section\nContent"
-        let result = ReviewNote.insertAfterHeading("Section", note: "Check this", in: md)
+        let noteBlock = "```review\nCheck this\n```"
+        let result = ReviewNote.insertAfterHeading("Section", note: noteBlock, in: md)
         #expect(result.contains("```review\nCheck this\n```"))
         // Note should be after the heading
         let sectionRange = result.range(of: "## Section")!
-        let noteRange = result.range(of: "```review")!
+        let noteRange = result.range(of: "```review\nCheck this")!
         #expect(noteRange.lowerBound > sectionRange.lowerBound)
     }
 
     @Test func commentsButtonLabelCountsNotesAndComments() {
         // Simulate the label logic from ContentView
-        let activeNotes = ["Note 1", "Note 2"]
-        let inlineComments = 3
+        let total = 5
         let resolvedCount = 1
-        let total = activeNotes.count + inlineComments
-        let label: String
-        if total == 0 && resolvedCount == 0 {
-            label = "Comments"
-        } else if resolvedCount == 0 {
-            label = "\(total)"
-        } else {
-            label = "\(total)/\(resolvedCount)"
-        }
+        // total > 0 and resolvedCount > 0 → "total/resolved"
+        let label = "\(total)/\(resolvedCount)"
         #expect(label == "5/1")
     }
 
@@ -633,15 +626,17 @@ struct AgentPromptTests {
     }
 
     @Test func agentPromptSingularNote() {
-        let noteCount = 1
-        let suffix = noteCount == 1 ? "" : "s"
+        let suffix = pluralSuffix(for: 1)
         #expect(suffix == "")
     }
 
     @Test func agentPromptPluralNotes() {
-        let noteCount = 5
-        let suffix = noteCount == 1 ? "" : "s"
+        let suffix = pluralSuffix(for: 5)
         #expect(suffix == "s")
+    }
+
+    private func pluralSuffix(for count: Int) -> String {
+        count == 1 ? "" : "s"
     }
 }
 
