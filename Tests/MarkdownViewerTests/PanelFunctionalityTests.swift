@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import UniformTypeIdentifiers
 @testable import MarkdownViewerLib
 
 // MARK: - TOC Panel Tests
