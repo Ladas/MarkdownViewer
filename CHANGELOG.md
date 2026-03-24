@@ -37,12 +37,18 @@
 - Prompt lets you review and edit before sending
 - Per-comment "Address" button in the Comments panel for targeted feedback
 
+#### Markdown Link Navigation
+- Clicking `.md` file links in the rendered preview opens them as new tabs in the same window
+- Supports relative paths resolved against the current file's directory
+- Recognizes `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn` extensions
+
 ### Improvements
 
 - Larger default window size (1300×900) for better readability
 - Larger default chat panel height (400px, expandable to 1200px)
 - Chat input field expands up to 15 lines for longer prompts
 - Comments panel count badge includes both review notes and inline comments
+- `baseURL` set on WKWebView so relative links and images resolve correctly
 
 ### Tests
 
@@ -50,3 +56,12 @@
 - `ChatMessageTests` — message model encoding/decoding, role raw values
 - `ChatHistoryManagerTests` — file key determinism, session ID persistence and reset, append/load/save/clear, `.claude-chat/` directory creation
 - `ClaudeCLIRunnerTests` — git root discovery, initialization, cancel when not running, claude path resolution
+- `PanelFunctionalityTests` — 50+ tests covering all panels:
+  - TOC panel: heading parsing, code block filtering, sequential IDs, level matching
+  - Comments panel: review note extraction/replace/insert, inline comment CRUD, resolved note detection, button label logic
+  - Chat panel: session management, per-file persistence, message encode/decode
+  - Preview panel: HTML rendering, chat template functions, JS escaping, view modes, source highlighter
+  - Link resolution: markdown extensions, relative path resolution, non-markdown filtering
+  - Diff panel: non-git fallback, available refs
+  - CLI stream events: assistant text extraction, thinking block filtering, session_id, multi-block join
+  - Action bar: address feedback prompt, agent prompt, explain/ask formatting
