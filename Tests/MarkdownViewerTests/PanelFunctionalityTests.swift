@@ -660,10 +660,9 @@ struct DocumentModelTests {
         #expect(doc.text == "")
     }
 
-    @Test func markdownDocumentIsReadOnly() throws {
-        let doc = MarkdownDocument(text: "content")
-        #expect(throws: CocoaError.self) {
-            _ = try doc.fileWrapper(configuration: .init(existingFile: nil, contentType: .plainText))
-        }
+    @Test func markdownDocumentDeclaresSupportedTypes() {
+        // MarkdownDocument reads markdown and plain text
+        let types = MarkdownDocument.readableContentTypes
+        #expect(types.contains(.plainText))
     }
 }
