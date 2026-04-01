@@ -1,0 +1,18 @@
+{
+  "filePath" : "Tests\/fixtures\/agi-hive-mind-research.md",
+  "messages" : [
+    {
+      "content" : "Read the file at: \/Users\/lsmola\/Projects\/MarkdownViewer\/Tests\/fixtures\/agi-hive-mind-research.md\n\nThis file contains 1 review note marked as ```review blocks. Find each one, address the feedback, then remove the block once resolved.\n\nKeep the rest of the document intact.",
+      "id" : "EC05301C-003B-4C2F-B460-2969DB78DD0B",
+      "role" : "user",
+      "timestamp" : "2026-03-19T20:17:53Z"
+    },
+    {
+      "content" : "Done. The review note has been addressed and removed. Here's what was added:\n\n- **Section 2.2** — added OpenAI Swarm and LangChain Agents to the Related Work table\n- **Section 4.1** — added benchmark rows for OpenAI Swarm (3) and LangChain (3)\n- **Section 4.4** (new) — \"Prototype Deployment Latency\" table with p50\/p95\/p99 percentiles and throughput for all configurations, plus a note explaining the latency characteristics",
+      "id" : "B08E8122-BF20-468A-AEC3-361C000EA274",
+      "role" : "assistant",
+      "timestamp" : "2026-03-19T20:19:00Z"
+    }
+  ],
+  "sessionId" : "ba2e4ed3-439a-4e82-963e-8313e3704033"
+}

@@ -173,9 +173,11 @@ public struct ContentView: View {
     @State private var navigationTrigger = 0
     @State private var navigationForward = true
     @State private var copyRenderedTrigger = 0
+    @State private var copyGDocsTrigger = 0
     @State private var exportHTMLTrigger = 0
     @State private var zoomLevel: Double = 1.0
     @State private var showCopied = false
+    @State private var copyingStatus = ""
     @State private var showTOC = false
     @State private var showDiff = false
     @State private var diffRef = "HEAD"
@@ -188,6 +190,10 @@ public struct ContentView: View {
     @State private var appearanceMode = "auto"
     @State private var contentWidth: Double = 980
     @State private var viewMode: ViewMode = .preview
+    private static let cachedThemes = MermaidThemeManager.loadThemes()
+    @State private var mermaidTheme: MermaidTheme = cachedThemes[0]
+    @State private var themeVersion: Int = 0
+    @State private var availableThemes: [MermaidTheme] = cachedThemes
     @State private var showComments = false
     @State private var resolvedNotes: [ResolvedBatch] = []
     @State private var previousNotes: [String] = []
@@ -263,12 +269,18 @@ public struct ContentView: View {
                     navigationTrigger: navigationTrigger,
                     navigationForward: navigationForward,
                     copyRenderedTrigger: copyRenderedTrigger,
+                    copyGDocsTrigger: copyGDocsTrigger,
+                    copyHTMLMode: appearanceMode,
                     exportHTMLTrigger: exportHTMLTrigger,
+                    exportHTMLMode: appearanceMode,
                     zoomLevel: zoomLevel,
                     scrollToHeadingTrigger: scrollToHeadingTrigger,
                     scrollToHeadingIndex: scrollToHeadingIndex,
                     appearanceMode: appearanceMode,
                     contentWidth: contentWidth,
+                    mermaidThemeJSON: mermaidTheme.initJSON,
+                    themeCSS: mermaidTheme.css,
+                    themeVersion: themeVersion,
                     onSearchResult: { total, current in
                         matchTotal = total
                         matchCurrent = current
@@ -295,15 +307,29 @@ public struct ContentView: View {
         }
         .frame(minWidth: 1100, minHeight: 750)
         .overlay(alignment: .topTrailing) {
-            if showCopied {
-                Text("Copied!")
-                    .font(.caption)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
+            VStack(spacing: 6) {
+                if !copyingStatus.isEmpty {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(copyingStatus)
+                            .font(.caption)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-                    .padding(12)
                     .transition(.opacity)
+                }
+                if showCopied {
+                    Text("Copied!")
+                        .font(.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                        .transition(.opacity)
+                }
             }
+            .padding(12)
         }
         .focusedValue(\.toggleSearch, toggleSearch)
         .focusedValue(\.findNext, findNext)
@@ -538,7 +564,7 @@ public struct ContentView: View {
 
             Spacer()
 
-            // Center: view mode
+            // Center: view mode + theme
             Picker("", selection: $viewMode) {
                 ForEach(ViewMode.allCases, id: \.self) { mode in
                     Text(mode.rawValue).tag(mode)
@@ -572,10 +598,40 @@ public struct ContentView: View {
                 }
                 .help("Open chat with review note instructions — edit before sending")
             }
+            Menu {
+                ForEach(availableThemes) { theme in
+                    Button(action: { selectMermaidTheme(theme) }) {
+                        if theme.id == mermaidTheme.id {
+                            Label(theme.name, systemImage: "checkmark")
+                        } else {
+                            Text(theme.name)
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "paintpalette")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Mermaid diagram theme: \(mermaidTheme.name)")
+            Button(action: cycleAppearance) {
+                Image(systemName: appearanceIcon)
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(appearanceDisabled)
+            .help(appearanceTooltip)
             actionButton("MD", icon: "doc.on.doc") { copySource() }
                 .help("Copy raw markdown source to clipboard (Cmd+Shift+C)")
             actionButton("HTML", icon: "doc.richtext") { copyRendered() }
                 .help("Copy as standalone HTML with CSS and diagrams as PNG (Cmd+Option+C)")
+            actionButton("GDoc", icon: "doc.on.doc") {
+                copyingStatus = "Preparing for Google Docs..."
+                copyGDocsTrigger += 1
+            }
+            .help("Copy for Google Docs — optimized paste with inline styles and diagrams as PNG")
             actionButton("Export", icon: "square.and.arrow.up") { exportHTML() }
                 .help("Save as standalone HTML file (Cmd+E)")
         }
@@ -957,6 +1013,50 @@ public struct ContentView: View {
         navigationTrigger += 1
     }
 
+    private var appearanceIcon: String {
+        switch appearanceMode {
+        case "light": return "sun.max.fill"
+        case "dark": return "moon.fill"
+        default: return "circle.lefthalf.filled"
+        }
+    }
+
+    private var appearanceDisabled: Bool {
+        mermaidTheme.supportedAppearances.count <= 1
+    }
+
+    private var appearanceTooltip: String {
+        if appearanceDisabled {
+            let only = mermaidTheme.supportedAppearances.first ?? "auto"
+            return "Appearance locked to \(only) — \(mermaidTheme.name) theme doesn't support switching"
+        }
+        return "Appearance: \(appearanceMode) (affects preview and copy)"
+    }
+
+    private func selectMermaidTheme(_ theme: MermaidTheme) {
+        mermaidTheme = theme
+        // If current appearance isn't supported by new theme, switch to a supported one
+        if !theme.supportedAppearances.contains(appearanceMode) {
+            if theme.supportedAppearances.contains("light") {
+                appearanceMode = "light"
+            } else if theme.supportedAppearances.contains("dark") {
+                appearanceMode = "dark"
+            } else {
+                appearanceMode = "auto"
+            }
+        }
+        // Increment themeVersion to trigger reload in MarkdownWebView
+        themeVersion += 1
+    }
+
+    private func cycleAppearance() {
+        let supported = mermaidTheme.supportedAppearances
+        let modes = ["auto", "light", "dark"].filter { supported.contains($0) }
+        guard modes.count > 1 else { return }
+        let current = modes.firstIndex(of: appearanceMode) ?? 0
+        appearanceMode = modes[(current + 1) % modes.count]
+    }
+
     private func copySource() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(currentText, forType: .string)
@@ -1078,7 +1178,7 @@ public struct ContentView: View {
     }
 
     private func showCopiedToast() {
-        withAnimation { showCopied = true }
+        withAnimation { copyingStatus = ""; showCopied = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             withAnimation { showCopied = false }
         }
