@@ -150,7 +150,7 @@ public final class SVGExporter: NSObject, WKNavigationDelegate {
     private func wrapSVGInHTML(_ svg: String) -> String {
         // Sanitize: strip script tags and event handlers from SVG
         let sanitized = svg
-            .replacingOccurrences(of: "<script[^>]*>[\\s\\S]*?</script>", with: "", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "<script[^>]*>[\\s\\S]*?</script\\s*>", with: "", options: [.regularExpression, .caseInsensitive])
             .replacingOccurrences(of: "\\son\\w+\\s*=\\s*\"[^\"]*\"", with: "", options: [.regularExpression, .caseInsensitive])
             .replacingOccurrences(of: "\\son\\w+\\s*=\\s*'[^']*'", with: "", options: [.regularExpression, .caseInsensitive])
         return """
