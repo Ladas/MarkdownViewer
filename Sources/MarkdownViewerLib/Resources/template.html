@@ -883,10 +883,14 @@
             var evenRow = content.querySelector('tr:nth-child(2n) td');
             if (evenRow) altRowBg = rgbToHex(window.getComputedStyle(evenRow).backgroundColor || '#f6f8fa');
 
-            // Strip classes/ids
+            // Strip classes/ids but keep heading ids for TOC anchor links
             clone.querySelectorAll('[class],[id]').forEach(function(el) {
                 el.removeAttribute('class');
-                el.removeAttribute('id');
+                var tag = el.tagName;
+                if (tag !== 'H1' && tag !== 'H2' && tag !== 'H3' &&
+                    tag !== 'H4' && tag !== 'H5' && tag !== 'H6') {
+                    el.removeAttribute('id');
+                }
             });
 
             var cellBorderCss = 'border:solid ' + tdBorder + ' 1pt;vertical-align:top;padding:5pt 5pt 5pt 5pt;overflow:hidden;overflow-wrap:break-word';
