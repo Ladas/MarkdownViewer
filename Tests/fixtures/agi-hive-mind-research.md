@@ -67,6 +67,79 @@ Biological swarms exhibit five properties enabling collective intelligence [Bona
 4. **Negative feedback** — unsuccessful paths naturally pruned
 5. **Redundancy** — individual failure does not collapse the system
 
+### 2.4 Wizard Toggles
+
+The control panel exposes a set of toggles for navigating, reviewing, and interacting with the document.
+
+#### Current Toggles
+
+| Toggle | Icon | Description | Shortcut |
+|--------|------|-------------|----------|
+| **Contents** | `list.bullet.indent` | Table of contents sidebar | — |
+| **Diff** | `arrow.left.arrow.right` | Git diff view against a selected ref | — |
+| **Note** | `plus.bubble` | Add a review note at the current position | — |
+| **Chat** | `ellipsis.message` | Claude chat panel for the current file | — |
+| **Comments** | `list.bullet.clipboard` | Right-side panel tracking active/resolved notes | — |
+| **View Mode** | Picker | Source MD / Preview / Source HTML | — |
+| **Content Width** | Slider | Adjust rendered width (400–2400 px) | — |
+| **Appearance** | `sun.max` / `moon` / `circle.lefthalf.filled` | Cycle light / dark / auto | — |
+| **Search** | — | Find-in-page bar | Cmd+F |
+
+#### Copy & Export Actions
+
+| Action | Description |
+|--------|-------------|
+| **Copy Path** | Copy file path to clipboard |
+| **Copy Agent** | Copy markdown optimised for AI agents |
+| **Copy Address** | Copy resolved inline comments |
+| **Copy MD** | Copy raw markdown source |
+| **Copy HTML** | Copy rendered HTML |
+| **Copy GDoc** | Copy themed HTML for Google Docs paste |
+| **Export** | Save standalone HTML file |
+
+#### Planned
+
+- **Presentation mode** — slide-style navigation through H2 sections
+- **Annotation export** — export all review notes as a standalone report
+- **Side-by-side diff** — dual-pane diff view instead of inline
+- **Custom themes** — user-defined JSON themes beyond built-in set
+
+```mermaid
+graph LR
+    subgraph Navigation
+        TOC[Contents]
+        SEARCH[Search]
+        WIDTH[Width Slider]
+    end
+
+    subgraph Review
+        NOTE[Add Note]
+        COMMENTS[Comments Panel]
+        DIFF[Git Diff]
+    end
+
+    subgraph Interaction
+        CHAT[Chat Panel]
+        APPEARANCE[Appearance]
+        VIEWMODE[View Mode]
+    end
+
+    subgraph Copy & Export
+        MD[Copy MD]
+        HTML[Copy HTML]
+        GDOC[Copy GDoc]
+        AGENT[Copy Agent]
+        EXPORT[Export HTML]
+    end
+
+    TOC -->|browse| NOTE
+    NOTE -->|track| COMMENTS
+    COMMENTS -->|resolve| DIFF
+    CHAT -->|suggest| NOTE
+    VIEWMODE -->|inspect| DIFF
+    GDOC -->|paste| HTML
+```
+
 ---
 
 

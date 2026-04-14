@@ -351,20 +351,71 @@
             // Strip SMIL animations (they break canvas rendering of data URI SVGs)
             clone.querySelectorAll('animate, animateMotion, animateTransform, set').forEach(function(a) { a.remove(); });
 
+            // Strip internal <style> so no CSS can override our inlined fills.
+            // We inline ALL computed styles from the live DOM below.
+            clone.querySelectorAll('style').forEach(function(s) { s.remove(); });
+
+            // Inline computed fill/stroke on ALL styled elements BEFORE foreignObject
+            // conversion (so element indices between original and clone match exactly).
+            var styledSel = 'rect, path, circle, ellipse, line, polygon, polyline, text, tspan';
+            var origStyled = svg.querySelectorAll(styledSel);
+            var cloneStyled = clone.querySelectorAll(styledSel);
+            for (var si = 0; si < origStyled.length && si < cloneStyled.length; si++) {
+                var cs = window.getComputedStyle(origStyled[si]);
+                var rawFill = cs.fill || '';
+                if (rawFill && rawFill !== 'none') {
+                    cloneStyled[si].setAttribute('fill', rawFill);
+                } else if (rawFill === 'none') {
+                    cloneStyled[si].setAttribute('fill', 'none');
+                }
+                var rawStroke = cs.stroke || '';
+                if (rawStroke && rawStroke !== 'none') {
+                    cloneStyled[si].setAttribute('stroke', rawStroke);
+                }
+                var sw = cs.strokeWidth || cs['stroke-width'] || '';
+                if (sw && sw !== '0' && sw !== '0px') {
+                    cloneStyled[si].setAttribute('stroke-width', sw);
+                }
+            }
+
             // Convert foreignObject labels to SVG <text> elements
             // (foreignObject is blocked by browsers when SVG is loaded as data URI in <img>)
-            clone.querySelectorAll('foreignObject').forEach(function(fo) {
+            var origFOs = svg.querySelectorAll('foreignObject');
+            clone.querySelectorAll('foreignObject').forEach(function(fo, foIdx) {
                 var foRect = { x: parseFloat(fo.getAttribute('x')) || 0, y: parseFloat(fo.getAttribute('y')) || 0,
                                w: parseFloat(fo.getAttribute('width')) || 100, h: parseFloat(fo.getAttribute('height')) || 20 };
-                // Extract text, splitting on <br> elements
                 var html = fo.innerHTML;
-                // Replace <br>, <br/>, <br /> with newline marker
                 var textWithBreaks = html.replace(/<br\s*\/?>/gi, '\n');
-                // Strip remaining HTML tags
                 var tmp = document.createElement('div');
                 tmp.innerHTML = textWithBreaks;
                 var textContent = tmp.textContent.trim();
                 if (!textContent) { fo.remove(); return; }
+
+                // Get fill from original foreignObject's computed CSS color.
+                // Query .edgeLabel/.nodeLabel first — generic div inherits wrong
+                // color from .label div { color: #fff } in themed diagrams.
+                var fill = '#000';
+                if (foIdx < origFOs.length) {
+                    var srcEl = origFOs[foIdx].querySelector('.edgeLabel, .nodeLabel')
+                            || origFOs[foIdx].querySelector('span')
+                            || origFOs[foIdx].querySelector('div, p');
+                    if (srcEl) {
+                        fill = window.getComputedStyle(srcEl).color || '#000';
+                    }
+                }
+
+                // Get background from original foreignObject's HTML
+                var bgColor = '';
+                if (foIdx < origFOs.length) {
+                    var bgEl = origFOs[foIdx].querySelector('.edgeLabel, [style*="background"]');
+                    if (!bgEl) bgEl = origFOs[foIdx].querySelector('span, div');
+                    if (bgEl) {
+                        var bgCs = window.getComputedStyle(bgEl).backgroundColor || '';
+                        if (bgCs && bgCs !== 'transparent' && bgCs !== 'rgba(0, 0, 0, 0)') {
+                            bgColor = bgCs;
+                        }
+                    }
+                }
 
                 var lines = textContent.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
                 var fontSize = 11;
@@ -372,7 +423,6 @@
                 var maxCharsPerLine = Math.floor(foRect.w / charWidth) || 20;
                 var lineHeight = fontSize * 1.4;
 
-                // Word-wrap long lines
                 var wrappedLines = [];
                 lines.forEach(function(line) {
                     if (line.length <= maxCharsPerLine) {
@@ -396,6 +446,19 @@
                 var startY = foRect.y + (foRect.h - totalHeight) / 2 + lineHeight * 0.7;
 
                 var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+                // Add background rect if the original had a background color
+                if (bgColor) {
+                    var bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    bgRect.setAttribute('x', foRect.x);
+                    bgRect.setAttribute('y', foRect.y);
+                    bgRect.setAttribute('width', foRect.w);
+                    bgRect.setAttribute('height', foRect.h);
+                    bgRect.setAttribute('fill', bgColor);
+                    bgRect.setAttribute('rx', '2');
+                    g.appendChild(bgRect);
+                }
+
                 wrappedLines.forEach(function(line, i) {
                     var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                     text.setAttribute('x', foRect.x + foRect.w / 2);
@@ -403,24 +466,13 @@
                     text.setAttribute('text-anchor', 'middle');
                     text.setAttribute('font-family', '-apple-system, sans-serif');
                     text.setAttribute('font-size', fontSize);
+                    text.setAttribute('fill', fill);
                     text.textContent = line;
                     g.appendChild(text);
                 });
                 fo.parentNode.replaceChild(g, fo);
             });
 
-            // Inline computed styles for elements affected by theme CSS
-            // (CSS doesn't apply when SVG is rendered as <img> data URI)
-            var origEls = svg.querySelectorAll('text');
-            var cloneEls = clone.querySelectorAll('text');
-            for (var si = 0; si < origEls.length && si < cloneEls.length; si++) {
-                var cs = window.getComputedStyle(origEls[si]);
-                cloneEls[si].setAttribute('fill', cs.fill || cs.color || '#000');
-            }
-            // Also set fill on newly created text elements (from foreignObject conversion)
-            clone.querySelectorAll('text:not([fill])').forEach(function(t) {
-                t.setAttribute('fill', '#000');
-            });
 
             var svgData = new XMLSerializer().serializeToString(clone);
             var encoded = btoa(unescape(encodeURIComponent(svgData)));
@@ -809,14 +861,27 @@
             _pngScale = 2; // Restore for other uses
             var content = document.getElementById('content');
 
-            // Sample colors from live DOM
+            // Sample all theme colors from live DOM so GDoc copy matches preview
             function cs(sel) {
                 var el = content.querySelector(sel);
                 return el ? window.getComputedStyle(el) : {};
             }
             var thBg = rgbToHex((cs('th') || {}).backgroundColor || '#f6f8fa');
             var thColor = rgbToHex((cs('th') || {}).color || '#000000');
+            var thBorder = rgbToHex((cs('th') || {}).borderColor || (cs('th') || {}).borderBottomColor || '#000000');
+            var tdBorder = rgbToHex((cs('td') || {}).borderColor || (cs('td') || {}).borderBottomColor || '#ddd');
             var hColor = rgbToHex((cs('h1') || {}).color || '#000000');
+            var h1Border = rgbToHex((cs('h1') || {}).borderBottomColor || '#eee');
+            var linkColor = rgbToHex((cs('a') || {}).color || '#0366d6');
+            var preBg = rgbToHex((cs('pre') || {}).backgroundColor || '#f6f8fa');
+            var preBorder = rgbToHex((cs('pre') || {}).borderLeftColor || 'transparent');
+            var preBorderW = (cs('pre') || {}).borderLeftWidth || '0px';
+            var bqBorder = rgbToHex((cs('blockquote') || {}).borderLeftColor || '#ccc');
+            var bqColor = rgbToHex((cs('blockquote') || {}).color || '#555');
+            // Sample alternating row background from live DOM
+            var altRowBg = '#f6f8fa';
+            var evenRow = content.querySelector('tr:nth-child(2n) td');
+            if (evenRow) altRowBg = rgbToHex(window.getComputedStyle(evenRow).backgroundColor || '#f6f8fa');
 
             // Strip classes/ids
             clone.querySelectorAll('[class],[id]').forEach(function(el) {
@@ -824,7 +889,8 @@
                 el.removeAttribute('id');
             });
 
-            var cellBorder = 'border-left:solid #000 1pt;border-right:solid #000 1pt;border-bottom:solid #000 1pt;border-top:solid #000 1pt;vertical-align:top;padding:5pt 5pt 5pt 5pt;overflow:hidden;overflow-wrap:break-word';
+            var cellBorderCss = 'border:solid ' + tdBorder + ' 1pt;vertical-align:top;padding:5pt 5pt 5pt 5pt;overflow:hidden;overflow-wrap:break-word';
+            var headerBorderCss = 'border:solid ' + thBorder + ' 1pt;vertical-align:top;padding:5pt 5pt 5pt 5pt;overflow:hidden;overflow-wrap:break-word';
 
             clone.querySelectorAll('table').forEach(function(table) {
                 table.removeAttribute('border');
@@ -834,39 +900,25 @@
                 table.style.cssText = 'border:none;border-collapse:collapse;width:100%;table-layout:auto';
             });
 
-            // Google Docs strips background-color from cells on paste.
-            // Use dark text on light bg — always readable after paste.
-            var headerBg = thBg;
-            var headerColor = thColor;
-            // If text is white/light, swap to dark-on-light
-            var r = parseInt(thColor.slice(1,3),16)||0, g = parseInt(thColor.slice(3,5),16)||0, b = parseInt(thColor.slice(5,7),16)||0;
-            if ((r+g+b) > 500) { // light text color
-                headerColor = thBg; // use bg color as text (dark blue)
-                // light tint of the bg color
-                var br = parseInt(thBg.slice(1,3),16)||200, bg2 = parseInt(thBg.slice(3,5),16)||200, bb = parseInt(thBg.slice(5,7),16)||200;
-                headerBg = '#' + [br,bg2,bb].map(function(c){ return ('0'+Math.round(c+(255-c)*0.8).toString(16)).slice(-2); }).join('');
-            }
-
             clone.querySelectorAll('th').forEach(function(th) {
                 var text = th.textContent;
                 var td = document.createElement('td');
-                td.setAttribute('bgcolor', headerBg);
-                td.style.cssText = cellBorder + ';background-color:' + headerBg + ';text-align:left';
-                td.innerHTML = '<b><font color="' + headerColor + '">' + escapeHtml(text) + '</font></b>';
+                td.setAttribute('bgcolor', thBg);
+                td.style.cssText = headerBorderCss + ';background-color:' + thBg + ';text-align:left';
+                td.innerHTML = '<b><font color="' + thColor + '">' + escapeHtml(text) + '</font></b>';
                 th.parentNode.replaceChild(td, th);
             });
 
-            // Regular cells with alternating row colors
+            // Regular cells with theme alternating row colors
             var allRows = clone.querySelectorAll('tr');
             for (var ri = 0; ri < allRows.length; ri++) {
                 var cells = allRows[ri].querySelectorAll('td');
                 for (var ci = 0; ci < cells.length; ci++) {
                     var td = cells[ci];
-                    if (td.style.cssText && td.style.cssText.indexOf('border-left') !== -1) continue;
-                    var rowBg = (ri % 2 === 1) ? '#f6f8fa' : '#ffffff';
+                    if (td.style.cssText && td.style.cssText.indexOf('border') !== -1) continue;
+                    var rowBg = (ri % 2 === 1) ? altRowBg : '#ffffff';
                     td.setAttribute('bgcolor', rowBg);
-                    td.style.cssText = cellBorder + ';text-align:left;background-color:' + rowBg;
-                    // Unwrap <p> tags — they add padding in Google Docs
+                    td.style.cssText = cellBorderCss + ';text-align:left;background-color:' + rowBg;
                     td.querySelectorAll('p').forEach(function(p) {
                         while (p.firstChild) p.parentNode.insertBefore(p.firstChild, p);
                         p.remove();
@@ -882,15 +934,27 @@
                 h.removeAttribute('style');
                 h.style.color = hColor;
             });
+            clone.querySelectorAll('h1,h2').forEach(function(h) {
+                h.style.borderBottom = '1px solid ' + h1Border;
+                h.style.paddingBottom = '8px';
+            });
+
+            clone.querySelectorAll('a').forEach(function(a) {
+                a.style.color = linkColor;
+            });
 
             clone.querySelectorAll('pre').forEach(function(pre) {
                 pre.removeAttribute('style');
-                pre.style.cssText = 'background-color:#f6f8fa;padding:12px;font-family:monospace;font-size:12px';
+                var preCss = 'background-color:' + preBg + ';padding:12px;font-family:monospace;font-size:12px';
+                if (preBorderW !== '0px' && preBorder !== 'transparent') {
+                    preCss += ';border-left:' + preBorderW + ' solid ' + preBorder;
+                }
+                pre.style.cssText = preCss;
             });
 
             clone.querySelectorAll('blockquote').forEach(function(bq) {
                 bq.removeAttribute('style');
-                bq.style.cssText = 'border-left:4px solid #ccc;padding-left:16px;margin-left:0;color:#555';
+                bq.style.cssText = 'border-left:4px solid ' + bqBorder + ';padding-left:16px;margin-left:0;color:' + bqColor;
             });
 
             var guid = 'xxxxxxxx-xxxx-4xxx'.replace(/x/g, function() { return (Math.random()*16|0).toString(16); });

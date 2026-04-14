@@ -54,7 +54,7 @@ public final class SVGExporter: NSObject, WKNavigationDelegate {
         self.webView = wv
         self.svgSize = CGSize(width: width, height: 400)
         self.capturedFrames = []
-        wv.loadHTMLString(html, baseURL: nil)
+        wv.loadHTMLString(html, baseURL: URL(string: "about:blank"))
     }
 
     // MARK: - WKNavigationDelegate
@@ -150,9 +150,9 @@ public final class SVGExporter: NSObject, WKNavigationDelegate {
     private func wrapSVGInHTML(_ svg: String) -> String {
         // Sanitize: strip script tags and event handlers from SVG
         let sanitized = svg
-            .replacingOccurrences(of: "<script[^>]*>[\\s\\S]*?</script>", with: "", options: .regularExpression)
-            .replacingOccurrences(of: "\\son\\w+\\s*=\\s*\"[^\"]*\"", with: "", options: .regularExpression)
-            .replacingOccurrences(of: "\\son\\w+\\s*=\\s*'[^']*'", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "<script[^>]*>[\\s\\S]*?</script>", with: "", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "\\son\\w+\\s*=\\s*\"[^\"]*\"", with: "", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "\\son\\w+\\s*=\\s*'[^']*'", with: "", options: [.regularExpression, .caseInsensitive])
         return """
         <!DOCTYPE html>
         <html><head>
