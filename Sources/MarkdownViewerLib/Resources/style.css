@@ -46,6 +46,21 @@ body {
     z-index: 10;
 }
 
+.mermaid-btn-group {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 10;
+}
+
+.mermaid-container:hover .mermaid-btn-group {
+    opacity: 1;
+}
+
 .mermaid-container:hover .mermaid-copy-btn {
     opacity: 1;
 }
