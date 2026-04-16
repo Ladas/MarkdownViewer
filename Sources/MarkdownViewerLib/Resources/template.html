@@ -8,6 +8,7 @@
     <style>/* {{VENDOR_CSS}} */</style>
     <style>/* {{FA_CSS}} */</style>
     <style>/* {{CSS}} */</style>
+    <style id="theme-css"></style>
     <script>/* {{PURIFY_JS}} */</script>
     <script>/* {{MARKED_JS}} */</script>
     <script>/* {{MERMAID_JS}} */</script>
@@ -24,7 +25,10 @@
             if (typeof DOMPurify !== 'undefined') {
                 rawHTML = DOMPurify.sanitize(rawHTML, {
                     FORBID_TAGS: ['foreignObject'],
-                    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'xlink:href']
+                    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onmouseenter',
+                        'onfocus', 'onblur', 'onanimationend', 'ontransitionend', 'onpointerover',
+                        'onmousedown', 'onmouseup', 'onkeydown', 'onkeyup', 'onsubmit',
+                        'xlink:href']
                 });
                 document.getElementById('content').innerHTML = rawHTML;
             } else {
@@ -41,13 +45,29 @@
             el.appendChild(pre);
         }
 
+        // Sanitize mermaid text for securityLevel:'loose' while preventing XSS
+        function sanitizeMermaidText(text) {
+            // 1. Strip HTML tags except <br> and <br/>
+            text = text.replace(/<(?!\/?br\s*\/?\s*>)\/?[a-zA-Z][^>]*>/gi, '');
+            // 2. Strip mermaid click/href directives (javascript: URI XSS vector)
+            text = text.replace(/^\s*click\s+\S+\s+(href|callback)\s+.*$/gim, '');
+            text = text.replace(/^\s*click\s+\S+\s+"javascript:.*$/gim, '');
+            // 3. Strip url() from style/classDef values (CSS exfiltration)
+            text = text.replace(/url\s*\([^)]*\)/gi, 'none');
+            // 4. Rename 'default' used as node/subgraph ID (reserved word in mermaid)
+            text = text.replace(/\bsubgraph\s+default\b/g, 'subgraph _default');
+            text = text.replace(/\bstyle\s+default\b/g, 'style _default');
+            return text;
+        }
+
         document.querySelectorAll('code.language-mermaid').forEach(function(el) {
             var pre = el.parentElement;
             var div = document.createElement('pre');
             div.className = 'mermaid';
-            // Replace literal \n with actual newlines for mermaid line breaks
-            // (safe: no innerHTML, mermaid in strict mode handles \n in labels)
-            div.textContent = el.textContent.replace(/\\n/g, '\n');
+            var sanitized = sanitizeMermaidText(el.textContent);
+            // Replace literal \n with <br/> for line breaks in labels
+            sanitized = sanitized.replace(/\\n/g, '<br/>');
+            div.textContent = sanitized;
             pre.replaceWith(div);
         });
 
@@ -81,15 +101,22 @@
             pre.replaceWith(div);
         });
 
+        // Mermaid init — theme overridable via setMermaidTheme()
+        var _mermaidCustomInit = null;
         if (typeof mermaid !== 'undefined') {
-            mermaid.initialize({
+            var config = {
                 startOnLoad: false,
-                theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
-                securityLevel: 'strict',
-                flowchart: { useMaxWidth: true },
+                securityLevel: 'loose',
+                flowchart: { htmlLabels: true, useMaxWidth: true },
                 sequence: { useMaxWidth: true },
                 gantt: { useMaxWidth: true }
-            });
+            };
+            if (_mermaidCustomInit) {
+                Object.assign(config, _mermaidCustomInit);
+            } else {
+                config.theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default';
+            }
+            mermaid.initialize(config);
             mermaid.run()
                 .then(addDiagramCopyButtons)
                 .catch(function(e) { console.error('Mermaid error:', e); });
@@ -98,23 +125,360 @@
     </script>
 
     <script>
-    // Shared: convert an SVG element to a PNG data URL (2x retina, white bg)
-    function svgToPngDataUrl(svg) {
+    // Minimal GIF89a encoder — captures canvas frames as animated GIF
+    function GifEncoder(w, h, frames, delay) {
+        var buf = [];
+        function writeByte(b) { buf.push(b & 0xFF); }
+        function writeShort(s) { writeByte(s); writeByte(s >> 8); }
+        function writeStr(s) { for (var i=0;i<s.length;i++) writeByte(s.charCodeAt(i)); }
+
+        // Build color table from first frame (quantize to 256 colors)
+        function quantize(imageData) {
+            var colors = [], colorMap = {}, indexed = [];
+            var d = imageData.data;
+            for (var i=0; i<d.length; i+=4) {
+                var r=d[i]>>4, g=d[i+1]>>4, b=d[i+2]>>4;
+                var key = (r<<8)|(g<<4)|b;
+                if (colorMap[key] === undefined) {
+                    if (colors.length < 256) {
+                        colorMap[key] = colors.length;
+                        colors.push([d[i],d[i+1],d[i+2]]);
+                    } else {
+                        // Find nearest
+                        var best=0, bestD=Infinity;
+                        for (var c=0;c<colors.length;c++) {
+                            var dr=colors[c][0]-d[i], dg=colors[c][1]-d[i+1], db=colors[c][2]-d[i+2];
+                            var dist=dr*dr+dg*dg+db*db;
+                            if (dist<bestD) { bestD=dist; best=c; }
+                        }
+                        colorMap[key] = best;
+                    }
+                }
+                indexed.push(colorMap[key]);
+            }
+            while (colors.length < 256) colors.push([0,0,0]);
+            return { colors: colors, indexed: indexed };
+        }
+
+        // LZW compress
+        function lzwEncode(indexed, minCode) {
+            var clearCode = 1 << minCode;
+            var eoiCode = clearCode + 1;
+            var codeSize = minCode + 1;
+            var nextCode = eoiCode + 1;
+            var dict = {};
+            var output = [];
+            var bitBuf = 0, bitCount = 0;
+
+            function writeBits(code, size) {
+                bitBuf |= (code << bitCount);
+                bitCount += size;
+                while (bitCount >= 8) {
+                    output.push(bitBuf & 0xFF);
+                    bitBuf >>= 8;
+                    bitCount -= 8;
+                }
+            }
+
+            writeBits(clearCode, codeSize);
+            var prev = indexed[0].toString();
+            for (var i=1; i<indexed.length; i++) {
+                var curr = indexed[i].toString();
+                var key = prev + ',' + curr;
+                if (dict[key] !== undefined) {
+                    prev = key;
+                } else {
+                    writeBits(prev.indexOf(',') === -1 ? parseInt(prev) : dict[prev], codeSize);
+                    if (nextCode < 4096) {
+                        dict[key] = nextCode++;
+                        if (nextCode > (1 << codeSize) && codeSize < 12) codeSize++;
+                    } else {
+                        writeBits(clearCode, codeSize);
+                        dict = {};
+                        nextCode = eoiCode + 1;
+                        codeSize = minCode + 1;
+                    }
+                    prev = curr;
+                }
+            }
+            writeBits(prev.indexOf(',') === -1 ? parseInt(prev) : dict[prev], codeSize);
+            writeBits(eoiCode, codeSize);
+            if (bitCount > 0) output.push(bitBuf & 0xFF);
+            return output;
+        }
+
+        // Header
+        writeStr('GIF89a');
+        writeShort(w); writeShort(h);
+        writeByte(0xF7); // GCT flag, 256 colors
+        writeByte(0); // bg
+        writeByte(0); // aspect
+
+        // Process first frame for global color table
+        var q0 = quantize(frames[0]);
+        for (var c=0; c<256; c++) {
+            writeByte(q0.colors[c][0]); writeByte(q0.colors[c][1]); writeByte(q0.colors[c][2]);
+        }
+
+        // Netscape extension (loop)
+        writeByte(0x21); writeByte(0xFF); writeByte(11);
+        writeStr('NETSCAPE2.0');
+        writeByte(3); writeByte(1); writeShort(0); writeByte(0);
+
+        // Write each frame
+        for (var f=0; f<frames.length; f++) {
+            var q = (f === 0) ? q0 : quantize(frames[f]);
+            // GCE
+            writeByte(0x21); writeByte(0xF9); writeByte(4);
+            writeByte(0); writeShort(delay); writeByte(0); writeByte(0);
+            // Image descriptor
+            writeByte(0x2C);
+            writeShort(0); writeShort(0); writeShort(w); writeShort(h);
+            writeByte(0); // no local color table
+            // LZW data
+            var minCode = 8;
+            writeByte(minCode);
+            var compressed = lzwEncode(q.indexed, minCode);
+            // Sub-blocks
+            var pos = 0;
+            while (pos < compressed.length) {
+                var chunk = Math.min(255, compressed.length - pos);
+                writeByte(chunk);
+                for (var j=0; j<chunk; j++) writeByte(compressed[pos++]);
+            }
+            writeByte(0); // block terminator
+        }
+
+        writeByte(0x3B); // trailer
+        return new Uint8Array(buf);
+    }
+
+    // Render SVG via Swift (resvg for static, hidden WKWebView for animated)
+    window._svgRenderCallbacks = {};
+    function renderSvgViaSwift(svg) {
+        return new Promise(function(resolve) {
+            var animated = svgHasAnimation(svg);
+            var svgMarkup = new XMLSerializer().serializeToString(svg);
+            var id = 'svg_' + Math.random().toString(36).substr(2, 9);
+            window._svgRenderCallbacks[id] = function(dataUrl) {
+                delete window._svgRenderCallbacks[id];
+                resolve(dataUrl); // null if failed
+            };
+            postToHandler('renderSvgResvg', { svg: svgMarkup, animated: animated, id: id });
+            // Timeout: 30s
+            setTimeout(function() {
+                if (window._svgRenderCallbacks[id]) {
+                    delete window._svgRenderCallbacks[id];
+                    resolve(null);
+                }
+            }, 30000);
+        });
+    }
+
+    // Request animated SVG → GIF capture from Swift (WKWebView.takeSnapshot)
+    function requestGifCapture(svg) {
         return new Promise(function(resolve, reject) {
             var rect = svg.getBoundingClientRect();
-            var w = Math.ceil(rect.width);
-            var h = Math.ceil(rect.height);
+            var scrollX = window.scrollX;
+            var scrollY = window.scrollY;
+            // Get animation duration
+            var anims = svg.querySelectorAll('animate, animateMotion, animateTransform');
+            var maxDur = 4;
+            anims.forEach(function(a) {
+                var dur = parseFloat(a.getAttribute('dur')) || 0;
+                if (dur > maxDur) maxDur = dur;
+            });
+            // Send rect + duration to Swift for snapshot-based GIF capture
+            postToHandler('captureGif', {
+                x: rect.left + scrollX,
+                y: rect.top + scrollY,
+                width: Math.ceil(rect.width),
+                height: Math.ceil(rect.height),
+                duration: maxDur,
+                frames: 12
+            });
+            // Swift will call window._gifCaptureResolve with the data URL
+            window._gifCaptureResolve = resolve;
+            window._gifCaptureReject = reject;
+            // Timeout after 30s
+            setTimeout(function() {
+                if (window._gifCaptureReject) {
+                    window._gifCaptureReject(new Error('GIF capture timeout'));
+                    window._gifCaptureResolve = null;
+                    window._gifCaptureReject = null;
+                }
+            }, 30000);
+        });
+    }
+
+    // Check if SVG has animations
+    function svgHasAnimation(svg) {
+        return svg.querySelector('animate, animateMotion, animateTransform, set') !== null;
+    }
+
+    // Convert SVG to PNG — strips animations for static capture
+    var _pngScale = 2; // Default 2x retina, set to 1 for smaller GDoc copy
+
+    function svgToPngDataUrl(svg) {
+        return new Promise(function(resolve, reject) {
+            // Use getBBox for tight content bounds (no padding/empty space)
+            var bbox;
+            try { bbox = svg.getBBox(); } catch(e) { bbox = null; }
+            var displayRect = svg.getBoundingClientRect();
+
+            var w, h;
+            if (bbox && bbox.width > 0 && bbox.height > 0) {
+                // Add small padding around content
+                var pad = 10;
+                w = Math.ceil(bbox.width + pad * 2);
+                h = Math.ceil(bbox.height + pad * 2);
+            } else {
+                w = Math.ceil(displayRect.width);
+                h = Math.ceil(displayRect.height);
+            }
             if (w === 0 || h === 0) { reject(new Error('zero size')); return; }
 
             var clone = svg.cloneNode(true);
+            clone.removeAttribute('style');
+            // Set viewBox to tight content bounds
+            if (bbox && bbox.width > 0) {
+                var pad = 10;
+                clone.setAttribute('viewBox', (bbox.x - pad) + ' ' + (bbox.y - pad) + ' ' + (bbox.width + pad*2) + ' ' + (bbox.height + pad*2));
+            }
             clone.setAttribute('width', w);
             clone.setAttribute('height', h);
+
+            // Strip SMIL animations (they break canvas rendering of data URI SVGs)
+            clone.querySelectorAll('animate, animateMotion, animateTransform, set').forEach(function(a) { a.remove(); });
+
+            // Strip internal <style> so no CSS can override our inlined fills.
+            // We inline ALL computed styles from the live DOM below.
+            clone.querySelectorAll('style').forEach(function(s) { s.remove(); });
+
+            // Inline computed fill/stroke on ALL styled elements BEFORE foreignObject
+            // conversion (so element indices between original and clone match exactly).
+            var styledSel = 'rect, path, circle, ellipse, line, polygon, polyline, text, tspan';
+            var origStyled = svg.querySelectorAll(styledSel);
+            var cloneStyled = clone.querySelectorAll(styledSel);
+            for (var si = 0; si < origStyled.length && si < cloneStyled.length; si++) {
+                var cs = window.getComputedStyle(origStyled[si]);
+                var rawFill = cs.fill || '';
+                if (rawFill && rawFill !== 'none') {
+                    cloneStyled[si].setAttribute('fill', rawFill);
+                } else if (rawFill === 'none') {
+                    cloneStyled[si].setAttribute('fill', 'none');
+                }
+                var rawStroke = cs.stroke || '';
+                if (rawStroke && rawStroke !== 'none') {
+                    cloneStyled[si].setAttribute('stroke', rawStroke);
+                }
+                var sw = cs.strokeWidth || cs['stroke-width'] || '';
+                if (sw && sw !== '0' && sw !== '0px') {
+                    cloneStyled[si].setAttribute('stroke-width', sw);
+                }
+            }
+
+            // Convert foreignObject labels to SVG <text> elements
+            // (foreignObject is blocked by browsers when SVG is loaded as data URI in <img>)
+            var origFOs = svg.querySelectorAll('foreignObject');
+            clone.querySelectorAll('foreignObject').forEach(function(fo, foIdx) {
+                var foRect = { x: parseFloat(fo.getAttribute('x')) || 0, y: parseFloat(fo.getAttribute('y')) || 0,
+                               w: parseFloat(fo.getAttribute('width')) || 100, h: parseFloat(fo.getAttribute('height')) || 20 };
+                var html = fo.innerHTML;
+                var textWithBreaks = html.replace(/<br\s*\/?>/gi, '\n');
+                var tmp = document.createElement('div');
+                tmp.innerHTML = textWithBreaks;
+                var textContent = tmp.textContent.trim();
+                if (!textContent) { fo.remove(); return; }
+
+                // Get fill from original foreignObject's computed CSS color.
+                // Query .edgeLabel/.nodeLabel first — generic div inherits wrong
+                // color from .label div { color: #fff } in themed diagrams.
+                var fill = '#000';
+                if (foIdx < origFOs.length) {
+                    var srcEl = origFOs[foIdx].querySelector('.edgeLabel, .nodeLabel')
+                            || origFOs[foIdx].querySelector('span')
+                            || origFOs[foIdx].querySelector('div, p');
+                    if (srcEl) {
+                        fill = window.getComputedStyle(srcEl).color || '#000';
+                    }
+                }
+
+                // Get background from original foreignObject's HTML
+                var bgColor = '';
+                if (foIdx < origFOs.length) {
+                    var bgEl = origFOs[foIdx].querySelector('.edgeLabel, [style*="background"]');
+                    if (!bgEl) bgEl = origFOs[foIdx].querySelector('span, div');
+                    if (bgEl) {
+                        var bgCs = window.getComputedStyle(bgEl).backgroundColor || '';
+                        if (bgCs && bgCs !== 'transparent' && bgCs !== 'rgba(0, 0, 0, 0)') {
+                            bgColor = bgCs;
+                        }
+                    }
+                }
+
+                var lines = textContent.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+                var fontSize = 11;
+                var charWidth = fontSize * 0.6;
+                var maxCharsPerLine = Math.floor(foRect.w / charWidth) || 20;
+                var lineHeight = fontSize * 1.4;
+
+                var wrappedLines = [];
+                lines.forEach(function(line) {
+                    if (line.length <= maxCharsPerLine) {
+                        wrappedLines.push(line);
+                    } else {
+                        var words = line.split(/\s+/);
+                        var current = '';
+                        words.forEach(function(word) {
+                            if (current.length + word.length + 1 > maxCharsPerLine && current.length > 0) {
+                                wrappedLines.push(current);
+                                current = word;
+                            } else {
+                                current = current ? current + ' ' + word : word;
+                            }
+                        });
+                        if (current) wrappedLines.push(current);
+                    }
+                });
+
+                var totalHeight = wrappedLines.length * lineHeight;
+                var startY = foRect.y + (foRect.h - totalHeight) / 2 + lineHeight * 0.7;
+
+                var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+                // Add background rect if the original had a background color
+                if (bgColor) {
+                    var bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    bgRect.setAttribute('x', foRect.x);
+                    bgRect.setAttribute('y', foRect.y);
+                    bgRect.setAttribute('width', foRect.w);
+                    bgRect.setAttribute('height', foRect.h);
+                    bgRect.setAttribute('fill', bgColor);
+                    bgRect.setAttribute('rx', '2');
+                    g.appendChild(bgRect);
+                }
+
+                wrappedLines.forEach(function(line, i) {
+                    var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', foRect.x + foRect.w / 2);
+                    text.setAttribute('y', startY + i * lineHeight);
+                    text.setAttribute('text-anchor', 'middle');
+                    text.setAttribute('font-family', '-apple-system, sans-serif');
+                    text.setAttribute('font-size', fontSize);
+                    text.setAttribute('fill', fill);
+                    text.textContent = line;
+                    g.appendChild(text);
+                });
+                fo.parentNode.replaceChild(g, fo);
+            });
+
 
             var svgData = new XMLSerializer().serializeToString(clone);
             var encoded = btoa(unescape(encodeURIComponent(svgData)));
 
             var canvas = document.createElement('canvas');
-            var scale = 2;
+            var scale = _pngScale;
             canvas.width = w * scale;
             canvas.height = h * scale;
             var ctx = canvas.getContext('2d');
@@ -133,7 +497,71 @@
     }
 
     // Per-diagram hover copy buttons
+    // Add hover buttons (Copy + Save) to a diagram wrapper
+    function addDiagramButtons(wrapper, svg) {
+        var btnGroup = document.createElement('div');
+        btnGroup.className = 'mermaid-btn-group';
+
+        // Copy button
+        var copyBtn = document.createElement('button');
+        copyBtn.className = 'mermaid-copy-btn';
+        copyBtn.textContent = 'Copy';
+        copyBtn.onclick = function(e) {
+            e.stopPropagation();
+            svgToPngDataUrl(svg).then(function(pngUrl) {
+                postToHandler('copyImage', pngUrl);
+                copyBtn.textContent = 'Copied!';
+                setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
+            }).catch(function() {
+                copyBtn.textContent = 'Error';
+                setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
+            });
+        };
+        btnGroup.appendChild(copyBtn);
+
+        // Save/download button
+        var saveBtn = document.createElement('button');
+        saveBtn.className = 'mermaid-copy-btn';
+        saveBtn.textContent = 'Save';
+        saveBtn.onclick = function(e) {
+            e.stopPropagation();
+            svgToPngDataUrl(svg).then(function(pngUrl) {
+                postToHandler('saveDiagram', pngUrl);
+                saveBtn.textContent = 'Saved!';
+                setTimeout(function() { saveBtn.textContent = 'Save'; }, 1500);
+            }).catch(function() {
+                saveBtn.textContent = 'Error';
+                setTimeout(function() { saveBtn.textContent = 'Save'; }, 1500);
+            });
+        };
+        btnGroup.appendChild(saveBtn);
+
+        // GIF button (only for animated SVGs)
+        if (svgHasAnimation(svg)) {
+            var gifBtn = document.createElement('button');
+            gifBtn.className = 'mermaid-copy-btn';
+            gifBtn.textContent = 'GIF';
+            gifBtn.onclick = function(e) {
+                e.stopPropagation();
+                gifBtn.textContent = 'Capturing...';
+                renderSvgViaSwift(svg).then(function(dataUrl) {
+                    if (dataUrl) {
+                        postToHandler('copyImage', dataUrl);
+                        gifBtn.textContent = 'Copied!';
+                    } else {
+                        gifBtn.textContent = 'Failed';
+                    }
+                    setTimeout(function() { gifBtn.textContent = 'GIF'; }, 1500);
+                });
+            };
+            btnGroup.appendChild(gifBtn);
+        }
+
+        wrapper.appendChild(btnGroup);
+    }
+
     function addDiagramCopyButtons() {
+        // Mermaid diagrams
         document.querySelectorAll('pre.mermaid').forEach(function(el) {
             if (el.parentNode.classList && el.parentNode.classList.contains('mermaid-container')) return;
             var svg = el.querySelector('svg');
@@ -143,39 +571,40 @@
             wrapper.className = 'mermaid-container';
             el.parentNode.insertBefore(wrapper, el);
             wrapper.appendChild(el);
+            addDiagramButtons(wrapper, svg);
+        });
 
-            var btn = document.createElement('button');
-            btn.className = 'mermaid-copy-btn';
-            btn.textContent = 'Copy diagram';
-            btn.onclick = function(e) {
-                e.stopPropagation();
-                svgToPngDataUrl(svg).then(function(pngUrl) {
-                    postToHandler('copyImage', pngUrl);
-                    btn.textContent = 'Copied!';
-                    setTimeout(function() { btn.textContent = 'Copy diagram'; }, 1500);
-                }).catch(function() {
-                    btn.textContent = 'Error';
-                    setTimeout(function() { btn.textContent = 'Copy diagram'; }, 1500);
-                });
-            };
-            wrapper.appendChild(btn);
+        // Standalone inline SVGs
+        document.querySelectorAll('#content > svg, #content > p > svg').forEach(function(svg) {
+            if (svg.closest('.mermaid-container') || svg.closest('pre.mermaid')) return;
+            if (svg.parentNode.classList && svg.parentNode.classList.contains('svg-container')) return;
+
+            var wrapper = document.createElement('div');
+            wrapper.className = 'mermaid-container svg-container';
+            svg.parentNode.insertBefore(wrapper, svg);
+            wrapper.appendChild(svg);
+            addDiagramButtons(wrapper, svg);
         });
     }
 
-    // Shared: clone content, convert mermaid to PNG, clean up artifacts
-    async function prepareCleanContent() {
+    // Shared: clone content, clean up artifacts
+    // keepSVG=true: preserve inline SVGs (for HTML copy — animations survive)
+    // keepSVG=false: convert all SVGs to PNG (for GDoc copy — static images)
+    async function prepareCleanContent(keepSVG) {
         var content = document.getElementById('content');
 
-        // Convert all mermaid SVGs to PNG using originals (for correct dimensions)
-        var origMermaids = content.querySelectorAll('pre.mermaid');
+        // Convert mermaid SVGs to PNG (unless keepSVG)
         var pngUrls = [];
-        for (var i = 0; i < origMermaids.length; i++) {
-            var svg = origMermaids[i].querySelector('svg');
-            if (svg) {
-                try { pngUrls.push(await svgToPngDataUrl(svg)); }
-                catch(e) { pngUrls.push(null); }
-            } else {
-                pngUrls.push(null);
+        if (!keepSVG) {
+            var origMermaids = content.querySelectorAll('pre.mermaid');
+            for (var i = 0; i < origMermaids.length; i++) {
+                var svg = origMermaids[i].querySelector('svg');
+                if (svg) {
+                    try { pngUrls.push(await svgToPngDataUrl(svg)); }
+                    catch(e) { pngUrls.push(null); }
+                } else {
+                    pngUrls.push(null);
+                }
             }
         }
 
@@ -188,63 +617,116 @@
             m.parentNode.replaceChild(document.createTextNode(m.textContent), m);
         });
 
-        // Replace mermaid diagrams with PNG images
-        var cloneMermaids = clone.querySelectorAll('pre.mermaid');
-        cloneMermaids.forEach(function(pre, i) {
-            if (!pngUrls[i]) return;
-            var img = document.createElement('img');
-            img.src = pngUrls[i];
-            img.style.maxWidth = '100%';
-            var container = pre.closest('.mermaid-container');
-            (container || pre).replaceWith(img);
-        });
-
-        // Convert standalone SVGs to PNG for copy/export
-        var standaloneSvgs = clone.querySelectorAll('svg:not(.mermaid svg)');
-        for (var si = 0; si < standaloneSvgs.length; si++) {
-            var svg = standaloneSvgs[si];
-            if (svg.closest('.mermaid-container') || svg.closest('pre.mermaid')) continue;
-            try {
-                var pngUrl = await svgToPngDataUrl(svg);
+        // Replace mermaid diagrams with PNG images (unless keepSVG)
+        if (!keepSVG) {
+            var cloneMermaids = clone.querySelectorAll('pre.mermaid');
+            cloneMermaids.forEach(function(pre, i) {
+                if (!pngUrls[i]) return;
                 var img = document.createElement('img');
-                img.src = pngUrl;
+                img.src = pngUrls[i];
                 img.style.maxWidth = '100%';
-                svg.replaceWith(img);
-            } catch(e) {}
+                var container = pre.closest('.mermaid-container');
+                (container || pre).replaceWith(img);
+            });
+        } else {
+            // Keep SVGs but remove copy buttons
+            clone.querySelectorAll('.mermaid-copy-btn').forEach(function(b) { b.remove(); });
         }
 
-        // Inline table styles for Google Docs compatibility
+        // Remove review note edit buttons from clone
+        clone.querySelectorAll('.review-note-edit').forEach(function(b) { b.remove(); });
+        // Remove SVG copy buttons from clone
+        clone.querySelectorAll('.svg-copy-btn').forEach(function(b) { b.remove(); });
+
+        // Convert standalone SVGs (unless keepSVG — preserves animations)
+        // Animated SVGs → GIF, static SVGs → PNG
+        if (!keepSVG) {
+            var contentEl = document.getElementById('content');
+            var standaloneSvgs = clone.querySelectorAll('svg:not(.mermaid svg)');
+            var origSvgs = contentEl.querySelectorAll('svg:not(.mermaid svg)');
+            for (var si = 0; si < standaloneSvgs.length; si++) {
+                var svgClone = standaloneSvgs[si];
+                if (svgClone.closest('.mermaid-container') || svgClone.closest('pre.mermaid')) continue;
+                try {
+                    var origSvg = (si < origSvgs.length) ? origSvgs[si] : svgClone;
+                    // Swift renderer: resvg for static, hidden WKWebView for animated
+                    var dataUrl = await renderSvgViaSwift(origSvg);
+                    var img = document.createElement('img');
+                    img.src = dataUrl;
+                    img.style.maxWidth = '100%';
+                    svgClone.replaceWith(img);
+                } catch(e) {
+                    console.error('SVG conversion error:', e);
+                }
+            }
+        }
+
+        // Inline computed styles for Google Docs compatibility
+        // Uses getComputedStyle on live DOM to pick up theme colors
+        function cs(selector, idx) {
+            var el = content.querySelectorAll(selector)[idx || 0];
+            return el ? window.getComputedStyle(el) : null;
+        }
+
+        // Sample computed colors from live DOM (with theme applied)
+        var thBg = (cs('th') || {}).backgroundColor || '#f6f8fa';
+        var thColor = (cs('th') || {}).color || '#000';
+        var thBorder = (cs('th') || {}).borderColor || '#d0d7de';
+        var tdBorder = (cs('td') || {}).borderColor || '#d0d7de';
+        var h1Color = (cs('h1') || {}).color || 'inherit';
+        var h1Border = (cs('h1') || {}).borderBottomColor || '#d0d7de';
+        var bqBorder = (cs('blockquote') || {}).borderLeftColor || '#d0d7de';
+        var bqColor = (cs('blockquote') || {}).color || '#656d76';
+        var codeBg = (cs('code') || {}).backgroundColor || 'rgba(175,184,193,0.2)';
+        var codeColor = (cs('code') || {}).color || 'inherit';
+        var preBg = (cs('pre:not(.mermaid)') || {}).backgroundColor || '#f6f8fa';
+        var preBorder = (cs('pre:not(.mermaid)') || {}).borderLeftColor || 'transparent';
+        var linkColor = (cs('a') || {}).color || '#0969da';
+
+        // Convert rgb() to hex for Google Docs compatibility
+        function rgbToHex(rgb) {
+            if (!rgb || rgb.indexOf('rgb') === -1) return rgb;
+            var parts = rgb.match(/\d+/g);
+            if (!parts || parts.length < 3) return rgb;
+            return '#' + parts.slice(0, 3).map(function(x) {
+                return ('0' + parseInt(x).toString(16)).slice(-2);
+            }).join('');
+        }
+        var thBgHex = rgbToHex(thBg);
+        var thColorHex = rgbToHex(thColor);
+
+        // If header text is white/light, swap to dark-on-light for paste compatibility
+        // (pasted HTML loses background-color, leaving white text on white = invisible)
+        var r = parseInt(thColorHex.slice(1,3),16)||0, g = parseInt(thColorHex.slice(3,5),16)||0, b = parseInt(thColorHex.slice(5,7),16)||0;
+        if ((r+g+b) > 500) {
+            // Light text → swap: use bg color as text, light tint as bg
+            var origBg = thBgHex;
+            thColorHex = origBg;
+            var br2 = parseInt(origBg.slice(1,3),16)||200, bg3 = parseInt(origBg.slice(3,5),16)||200, bb2 = parseInt(origBg.slice(5,7),16)||200;
+            thBgHex = '#' + [br2,bg3,bb2].map(function(c){ return ('0'+Math.round(c+(255-c)*0.8).toString(16)).slice(-2); }).join('');
+        }
+
         clone.querySelectorAll('table').forEach(function(table) {
-            table.style.borderCollapse = 'collapse';
-            table.style.borderSpacing = '0';
-            table.style.marginBottom = '16px';
-            table.style.fontSize = '14px';
-            table.setAttribute('cellpadding', '0');
+            table.setAttribute('border', '1');
+            table.setAttribute('cellpadding', '8');
             table.setAttribute('cellspacing', '0');
+            table.setAttribute('width', '100%');
+            table.style.borderCollapse = 'collapse';
+            table.style.marginBottom = '16px';
         });
         clone.querySelectorAll('th').forEach(function(th) {
-            th.style.padding = '8px 16px';
-            th.style.border = '1px solid #d0d7de';
-            th.style.fontWeight = '600';
-            th.style.backgroundColor = '#f6f8fa';
-            th.style.textAlign = 'left';
-            th.style.whiteSpace = 'nowrap';
+            var text = th.textContent;
+            th.textContent = text;
+            th.setAttribute('bgcolor', thBgHex);
+            th.style.cssText = 'padding:8px 12px;font-weight:600;text-align:left;color:' + thColorHex + ';background-color:' + thBgHex;
         });
         clone.querySelectorAll('td').forEach(function(td) {
-            td.style.padding = '8px 16px';
-            td.style.border = '1px solid #d0d7de';
-            td.style.textAlign = 'left';
+            td.style.cssText = 'padding:8px 12px;text-align:left;vertical-align:top;background-color:transparent';
         });
-        clone.querySelectorAll('tr:nth-child(2n)').forEach(function(tr) {
-            tr.querySelectorAll('td').forEach(function(td) {
-                td.style.backgroundColor = '#f6f8fa';
-            });
-        });
-
-        // Inline code block styles for Google Docs compatibility
         clone.querySelectorAll('pre').forEach(function(pre) {
             if (pre.classList.contains('mermaid')) return;
-            pre.style.backgroundColor = '#f6f8fa';
+            pre.style.backgroundColor = preBg;
+            pre.style.borderLeft = '3px solid ' + preBorder;
             pre.style.borderRadius = '6px';
             pre.style.padding = '16px';
             pre.style.overflow = 'auto';
@@ -255,29 +737,47 @@
         clone.querySelectorAll('code').forEach(function(code) {
             code.style.fontFamily = 'SF Mono, Menlo, Consolas, monospace';
             code.style.fontSize = '13px';
+            code.style.color = codeColor;
             if (!code.parentElement || code.parentElement.tagName !== 'PRE') {
-                // Inline code
-                code.style.backgroundColor = 'rgba(175, 184, 193, 0.2)';
+                code.style.backgroundColor = codeBg;
                 code.style.borderRadius = '3px';
                 code.style.padding = '2px 5px';
             }
         });
-        // Inline blockquote styles
         clone.querySelectorAll('blockquote').forEach(function(bq) {
-            bq.style.borderLeft = '4px solid #d0d7de';
-            bq.style.color = '#656d76';
+            bq.style.borderLeft = '4px solid ' + bqBorder;
+            bq.style.color = bqColor;
             bq.style.paddingLeft = '16px';
             bq.style.marginLeft = '0';
         });
-        // Inline heading styles
         clone.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h) {
             h.style.fontWeight = '600';
+            h.style.color = h1Color;
+            h.style.backgroundColor = 'transparent';
             h.style.marginTop = '24px';
             h.style.marginBottom = '16px';
         });
         clone.querySelectorAll('h1,h2').forEach(function(h) {
-            h.style.borderBottom = '1px solid #d0d7de';
+            h.style.borderBottom = '1px solid ' + h1Border;
             h.style.paddingBottom = '8px';
+        });
+        clone.querySelectorAll('a').forEach(function(a) {
+            a.style.color = linkColor;
+            a.style.backgroundColor = 'transparent';
+        });
+
+        // Force transparent text backgrounds on all text elements
+        // (prevents white rectangles behind text after paste)
+        clone.querySelectorAll('p, span, strong, em, b, i, li, dt, dd').forEach(function(el) {
+            el.style.backgroundColor = 'transparent';
+        });
+        // Mermaid SVG text elements — transparent background
+        clone.querySelectorAll('svg text, svg .label, svg .edgeLabel, svg .nodeLabel, svg foreignObject div, svg foreignObject span, svg foreignObject p').forEach(function(el) {
+            if (el.tagName === 'text') {
+                // SVG text doesn't use backgroundColor
+            } else {
+                el.style.backgroundColor = 'transparent';
+            }
         });
 
         clone.normalize();
@@ -287,27 +787,37 @@
     // Build standalone HTML from rendered content
     // mode: 'auto' (include media queries), 'light', or 'dark'
     async function buildStandaloneHTML(mode) {
-        var clone = await prepareCleanContent();
+        var clone = await prepareCleanContent(true);
 
+        // Collect only essential CSS (skip Font Awesome and mermaid — diagrams are PNGs)
         var styles = '';
         for (var i = 0; i < document.styleSheets.length; i++) {
             try {
                 var rules = document.styleSheets[i].cssRules;
+                if (!rules || rules.length === 0) continue;
+                // Skip Font Awesome (huge base64 fonts, ~1.2MB)
+                var first = rules[0].cssText || '';
+                if (first.indexOf('font-awesome') !== -1 || first.indexOf('FontAwesome') !== -1 ||
+                    first.indexOf('fa-') !== -1) continue;
                 for (var j = 0; j < rules.length; j++) {
                     var rule = rules[j];
+                    var ruleText = rule.cssText || '';
+                    // Skip @font-face rules (base64 font data)
+                    if (rule.type === CSSRule.FONT_FACE_RULE) continue;
+                    // Skip mermaid-specific rules (diagrams are PNGs in copy)
+                    if (ruleText.indexOf('.mermaid') !== -1 && ruleText.indexOf('.mermaid-c') === -1) continue;
                     if (mode === 'light' && rule.type === CSSRule.MEDIA_RULE &&
                         rule.conditionText && rule.conditionText.indexOf('dark') !== -1) {
-                        continue; // Skip dark media queries in light mode
+                        continue;
                     }
                     if (mode === 'dark' && rule.type === CSSRule.MEDIA_RULE &&
                         rule.conditionText && rule.conditionText.indexOf('dark') !== -1) {
-                        // Extract dark rules as unconditional
                         for (var k = 0; k < rule.cssRules.length; k++) {
                             styles += rule.cssRules[k].cssText + '\n';
                         }
                         continue;
                     }
-                    styles += rule.cssText + '\n';
+                    styles += ruleText + '\n';
                 }
             } catch(e) {}
         }
@@ -326,6 +836,140 @@
             + '</style>\n</head>\n<body>\n<article class="markdown-body">\n'
             + clone.innerHTML
             + '\n</article>\n</body>\n</html>';
+    }
+
+    // Helper: rgb() to hex
+    function rgbToHex(rgb) {
+        if (!rgb || rgb.indexOf('rgb') === -1) return rgb || '#000000';
+        var parts = rgb.match(/\d+/g);
+        if (!parts || parts.length < 3) return rgb;
+        return '#' + parts.slice(0, 3).map(function(x) {
+            return ('0' + parseInt(x).toString(16)).slice(-2);
+        }).join('');
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // Copy for Google Docs — Google Docs native clipboard format
+    async function copyForGoogleDocs() {
+        try {
+            // Use 1x scale for GDoc copy (smaller clipboard size)
+            _pngScale = 1;
+            var clone = await prepareCleanContent(false);
+            _pngScale = 2; // Restore for other uses
+            var content = document.getElementById('content');
+
+            // Sample all theme colors from live DOM so GDoc copy matches preview
+            function cs(sel) {
+                var el = content.querySelector(sel);
+                return el ? window.getComputedStyle(el) : {};
+            }
+            var thBg = rgbToHex((cs('th') || {}).backgroundColor || '#f6f8fa');
+            var thColor = rgbToHex((cs('th') || {}).color || '#000000');
+            var thBorder = rgbToHex((cs('th') || {}).borderColor || (cs('th') || {}).borderBottomColor || '#000000');
+            var tdBorder = rgbToHex((cs('td') || {}).borderColor || (cs('td') || {}).borderBottomColor || '#ddd');
+            var hColor = rgbToHex((cs('h1') || {}).color || '#000000');
+            var h1Border = rgbToHex((cs('h1') || {}).borderBottomColor || '#eee');
+            var linkColor = rgbToHex((cs('a') || {}).color || '#0366d6');
+            var preBg = rgbToHex((cs('pre') || {}).backgroundColor || '#f6f8fa');
+            var preBorder = rgbToHex((cs('pre') || {}).borderLeftColor || 'transparent');
+            var preBorderW = (cs('pre') || {}).borderLeftWidth || '0px';
+            var bqBorder = rgbToHex((cs('blockquote') || {}).borderLeftColor || '#ccc');
+            var bqColor = rgbToHex((cs('blockquote') || {}).color || '#555');
+            // Sample alternating row background from live DOM
+            var altRowBg = '#f6f8fa';
+            var evenRow = content.querySelector('tr:nth-child(2n) td');
+            if (evenRow) altRowBg = rgbToHex(window.getComputedStyle(evenRow).backgroundColor || '#f6f8fa');
+
+            // Strip classes/ids but keep heading ids for TOC anchor links
+            clone.querySelectorAll('[class],[id]').forEach(function(el) {
+                el.removeAttribute('class');
+                var tag = el.tagName;
+                if (tag !== 'H1' && tag !== 'H2' && tag !== 'H3' &&
+                    tag !== 'H4' && tag !== 'H5' && tag !== 'H6') {
+                    el.removeAttribute('id');
+                }
+            });
+
+            var cellBorderCss = 'border:solid ' + tdBorder + ' 1pt;vertical-align:top;padding:5pt 5pt 5pt 5pt;overflow:hidden;overflow-wrap:break-word';
+            var headerBorderCss = 'border:solid ' + thBorder + ' 1pt;vertical-align:top;padding:5pt 5pt 5pt 5pt;overflow:hidden;overflow-wrap:break-word';
+
+            clone.querySelectorAll('table').forEach(function(table) {
+                table.removeAttribute('border');
+                table.removeAttribute('cellpadding');
+                table.removeAttribute('cellspacing');
+                table.removeAttribute('width');
+                table.style.cssText = 'border:none;border-collapse:collapse;width:100%;table-layout:auto';
+            });
+
+            clone.querySelectorAll('th').forEach(function(th) {
+                var text = th.textContent;
+                var td = document.createElement('td');
+                td.setAttribute('bgcolor', thBg);
+                td.style.cssText = headerBorderCss + ';background-color:' + thBg + ';text-align:left';
+                td.innerHTML = '<b><font color="' + thColor + '">' + escapeHtml(text) + '</font></b>';
+                th.parentNode.replaceChild(td, th);
+            });
+
+            // Regular cells with theme alternating row colors
+            var allRows = clone.querySelectorAll('tr');
+            for (var ri = 0; ri < allRows.length; ri++) {
+                var cells = allRows[ri].querySelectorAll('td');
+                for (var ci = 0; ci < cells.length; ci++) {
+                    var td = cells[ci];
+                    if (td.style.cssText && td.style.cssText.indexOf('border') !== -1) continue;
+                    var rowBg = (ri % 2 === 1) ? altRowBg : '#ffffff';
+                    td.setAttribute('bgcolor', rowBg);
+                    td.style.cssText = cellBorderCss + ';text-align:left;background-color:' + rowBg;
+                    td.querySelectorAll('p').forEach(function(p) {
+                        while (p.firstChild) p.parentNode.insertBefore(p.firstChild, p);
+                        p.remove();
+                    });
+                }
+            }
+
+            clone.querySelectorAll('img').forEach(function(img) {
+                img.style.maxWidth = '100%';
+            });
+
+            clone.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h) {
+                h.removeAttribute('style');
+                h.style.color = hColor;
+            });
+            clone.querySelectorAll('h1,h2').forEach(function(h) {
+                h.style.borderBottom = '1px solid ' + h1Border;
+                h.style.paddingBottom = '8px';
+            });
+
+            clone.querySelectorAll('a').forEach(function(a) {
+                a.style.color = linkColor;
+            });
+
+            clone.querySelectorAll('pre').forEach(function(pre) {
+                pre.removeAttribute('style');
+                var preCss = 'background-color:' + preBg + ';padding:12px;font-family:monospace;font-size:12px';
+                if (preBorderW !== '0px' && preBorder !== 'transparent') {
+                    preCss += ';border-left:' + preBorderW + ' solid ' + preBorder;
+                }
+                pre.style.cssText = preCss;
+            });
+
+            clone.querySelectorAll('blockquote').forEach(function(bq) {
+                bq.removeAttribute('style');
+                bq.style.cssText = 'border-left:4px solid ' + bqBorder + ';padding-left:16px;margin-left:0;color:' + bqColor;
+            });
+
+            var guid = 'xxxxxxxx-xxxx-4xxx'.replace(/x/g, function() { return (Math.random()*16|0).toString(16); });
+            var html = '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-' + guid + '">' + clone.innerHTML + '</b>';
+            postToHandler('copyGoogleDocs', html);
+        } catch(e) {
+            console.error('GDoc copy error:', e);
+            // Fallback: copy plain innerHTML
+            var fallback = document.getElementById('content').innerHTML;
+            postToHandler('copyGoogleDocs', fallback);
+        }
     }
 
     function postToHandler(name, body) {
@@ -534,6 +1178,12 @@
     // The Swift side triggers a content reload which preserves scroll position
 
     // Content width control
+    // Apply theme CSS for tables, headings, etc.
+    function setThemeCSS(css) {
+        var el = document.getElementById('theme-css');
+        if (el) el.textContent = css;
+    }
+
     function setContentWidth(px) {
         document.getElementById('content').style.maxWidth = px + 'px';
     }
