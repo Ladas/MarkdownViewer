@@ -264,6 +264,7 @@ public struct ContentView: View {
                 }
                 MarkdownWebView(
                     markdown: currentText,
+                    fileURL: fileURL,
                     overrideHTML: effectiveOverrideHTML,
                     searchText: showSearch ? searchText : "",
                     navigationTrigger: navigationTrigger,
