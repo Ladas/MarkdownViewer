@@ -37,11 +37,11 @@ struct ClaudeCLIRunnerTests {
     @Test func claudePathIsNotEmpty() {
         // The static claudePath resolver should always return a non-empty string
         // (at minimum the fallback "claude")
-        let mirror = Mirror(reflecting: ClaudeCLIRunner.self)
+        _ = Mirror(reflecting: ClaudeCLIRunner.self)
         // Access via a runner instance to trigger static init
         _ = ClaudeCLIRunner(workingDirectory: URL(fileURLWithPath: "/tmp"))
         // If we got here without crashing, the static initializer succeeded
-        #expect(true)
+        #expect(Bool(true))
     }
 
     @Test func parseAssistantEvent() {

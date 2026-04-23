@@ -4,9 +4,39 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
     private var process: Process?
     private let workingDirectory: URL
 
+    private static let loginShell: String = {
+        if FileManager.default.isExecutableFile(atPath: "/bin/zsh") { return "/bin/zsh" }
+        if FileManager.default.isExecutableFile(atPath: "/bin/bash") { return "/bin/bash" }
+        return "/bin/sh"
+    }()
+
+    /// Capture the full login-shell environment once (includes ~/.zshrc, ~/.bash_profile, etc.)
+    private static let shellEnvironment: [String: String] = {
+        let proc = Process()
+        let pipe = Pipe()
+        proc.executableURL = URL(fileURLWithPath: loginShell)
+        proc.arguments = ["-l", "-i", "-c", "env"]
+        proc.standardOutput = pipe
+        proc.standardError = FileHandle.nullDevice
+        proc.standardInput = FileHandle.nullDevice
+        try? proc.run()
+        proc.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: data, encoding: .utf8) else {
+            return ProcessInfo.processInfo.environment
+        }
+        var env: [String: String] = [:]
+        for line in output.components(separatedBy: "\n") {
+            guard let eqIndex = line.firstIndex(of: "=") else { continue }
+            let key = String(line[line.startIndex..<eqIndex])
+            let value = String(line[line.index(after: eqIndex)...])
+            if !key.isEmpty { env[key] = value }
+        }
+        return env.isEmpty ? ProcessInfo.processInfo.environment : env
+    }()
+
     /// Resolve full path to `claude` binary once
     private static let claudePath: String = {
-        // Check common locations
         let candidates = [
             "\(NSHomeDirectory())/.npm-global/bin/claude",
             "/usr/local/bin/claude",
@@ -18,10 +48,9 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
                 return path
             }
         }
-        // Fallback: try to resolve via shell
         let proc = Process()
         let pipe = Pipe()
-        proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        proc.executableURL = URL(fileURLWithPath: loginShell)
         proc.arguments = ["-l", "-i", "-c", "which claude"]
         proc.standardOutput = pipe
         proc.standardError = FileHandle.nullDevice
@@ -34,7 +63,7 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
            !resolved.isEmpty {
             return resolved
         }
-        return "claude" // last resort
+        return "claude"
     }()
 
     public init(workingDirectory: URL) {
@@ -97,7 +126,7 @@ public final class ClaudeCLIRunner: @unchecked Sendable {
         process.arguments = args
         process.currentDirectoryURL = workingDirectory
 
-        var env = ProcessInfo.processInfo.environment
+        var env = Self.shellEnvironment
         env["TERM"] = "dumb"
         process.environment = env
 
