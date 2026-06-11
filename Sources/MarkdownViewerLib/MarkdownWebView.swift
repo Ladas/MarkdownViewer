@@ -501,14 +501,29 @@ struct MarkdownWebView: NSViewRepresentable {
             decidePolicyFor navigationAction: WKNavigationAction,
             decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
         ) {
-            if navigationAction.navigationType == .linkActivated,
-               let url = navigationAction.request.url {
-                // Allow fragment-only navigation (anchor links like #heading-id)
-                if url.fragment != nil && url.scheme == webView.url?.scheme && url.host == webView.url?.host && url.path == webView.url?.path {
+            // For all navigations, check if it's just a fragment change (anchor link)
+            if let url = navigationAction.request.url,
+               let currentURL = webView.url,
+               url.fragment != nil {
+                // Compare URLs without fragments
+                var urlWithoutFragment = URLComponents(url: url, resolvingAgainstBaseURL: false)
+                urlWithoutFragment?.fragment = nil
+
+                var currentWithoutFragment = URLComponents(url: currentURL, resolvingAgainstBaseURL: false)
+                currentWithoutFragment?.fragment = nil
+
+                // If base URLs match, it's an anchor link within the same page - allow it
+                if let urlBase = urlWithoutFragment?.url,
+                   let currentBase = currentWithoutFragment?.url,
+                   urlBase == currentBase {
                     decisionHandler(.allow)
                     return
                 }
+            }
 
+            // Handle link activations (external links)
+            if navigationAction.navigationType == .linkActivated,
+               let url = navigationAction.request.url {
                 // Open external links in default browser
                 if let scheme = url.scheme?.lowercased(),
                    Self.allowedSchemes.contains(scheme) {
@@ -517,6 +532,7 @@ struct MarkdownWebView: NSViewRepresentable {
                 decisionHandler(.cancel)
                 return
             }
+
             decisionHandler(.allow)
         }
     }

@@ -31,6 +31,20 @@
                         'xlink:href']
                 });
                 document.getElementById('content').innerHTML = rawHTML;
+
+                // Manually add IDs to headings for anchor links
+                // Generate slug from heading text
+                function slugify(text) {
+                    return text.toLowerCase()
+                        .replace(/[^\w\s-]/g, '')
+                        .replace(/[\s_]+/g, '-')
+                        .replace(/^-+|-+$/g, '');
+                }
+                document.querySelectorAll('#content h1, #content h2, #content h3, #content h4, #content h5, #content h6').forEach(function(heading) {
+                    if (!heading.id) {
+                        heading.id = slugify(heading.textContent);
+                    }
+                });
             } else {
                 // Fail closed: refuse to render unsanitized HTML
                 var safeEl = document.getElementById('content');
@@ -1161,14 +1175,15 @@
         if (!a.title) a.title = a.getAttribute('href');
     });
 
-    // Anchor link scrolling (loadHTMLString has no base URL, so handle in JS)
+    // Anchor link scrolling
     document.addEventListener('click', function(e) {
         var link = e.target.closest('a');
         if (!link) return;
         var href = link.getAttribute('href');
         if (!href || href.charAt(0) !== '#') return;
         e.preventDefault();
-        var target = document.getElementById(href.substring(1));
+        var targetId = href.substring(1);
+        var target = document.getElementById(targetId);
         if (target) {
             target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
