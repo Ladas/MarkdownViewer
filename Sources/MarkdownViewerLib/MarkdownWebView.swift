@@ -503,6 +503,13 @@ struct MarkdownWebView: NSViewRepresentable {
         ) {
             if navigationAction.navigationType == .linkActivated,
                let url = navigationAction.request.url {
+                // Allow fragment-only navigation (anchor links like #heading-id)
+                if url.fragment != nil && url.scheme == webView.url?.scheme && url.host == webView.url?.host && url.path == webView.url?.path {
+                    decisionHandler(.allow)
+                    return
+                }
+
+                // Open external links in default browser
                 if let scheme = url.scheme?.lowercased(),
                    Self.allowedSchemes.contains(scheme) {
                     NSWorkspace.shared.open(url)
