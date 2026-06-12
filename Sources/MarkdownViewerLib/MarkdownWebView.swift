@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct MarkdownWebView: NSViewRepresentable {
     let markdown: String
     var overrideHTML: String?
+    var baseURL: URL?
     var searchText: String = ""
     var navigationTrigger: Int = 0
     var navigationForward: Bool = true
@@ -51,7 +52,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
         var html = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
         html = injectTheme(html)
-        webView.loadHTMLString(html, baseURL: nil)
+        loadHTML(html, in: webView, baseURL: baseURL)
         return webView
     }
 
@@ -88,7 +89,7 @@ struct MarkdownWebView: NSViewRepresentable {
             htmlToLoad = injectTheme(htmlToLoad)
             webView.evaluateJavaScript("window.scrollY") { result, _ in
                 coord.savedScrollY = result as? Double ?? 0
-                webView.loadHTMLString(htmlToLoad, baseURL: nil)
+                loadHTML(htmlToLoad, in: webView, baseURL: baseURL)
             }
             return
         }
@@ -147,6 +148,25 @@ struct MarkdownWebView: NSViewRepresentable {
             if coord.pageLoaded {
                 webView.evaluateJavaScript("setContentWidth(\(Int(contentWidth)))") { _, _ in }
             }
+        }
+    }
+
+    // Helper to load HTML with proper file access for local images
+    private func loadHTML(_ html: String, in webView: WKWebView, baseURL: URL?) {
+        guard let baseURL = baseURL else {
+            webView.loadHTMLString(html, baseURL: nil)
+            return
+        }
+
+        // Write HTML to a temporary file in the same directory to grant read access
+        let tempURL = baseURL.deletingLastPathComponent().appendingPathComponent(".markdown-viewer-temp.html")
+        do {
+            try html.write(to: tempURL, atomically: true, encoding: .utf8)
+            // loadFileURL grants read access to the entire directory
+            webView.loadFileURL(tempURL, allowingReadAccessTo: baseURL.deletingLastPathComponent())
+        } catch {
+            // Fallback to loadHTMLString if file write fails
+            webView.loadHTMLString(html, baseURL: baseURL.deletingLastPathComponent())
         }
     }
 
@@ -481,8 +501,30 @@ struct MarkdownWebView: NSViewRepresentable {
             decidePolicyFor navigationAction: WKNavigationAction,
             decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
         ) {
+            // For all navigations, check if it's just a fragment change (anchor link)
+            if let url = navigationAction.request.url,
+               let currentURL = webView.url,
+               url.fragment != nil {
+                // Compare URLs without fragments
+                var urlWithoutFragment = URLComponents(url: url, resolvingAgainstBaseURL: false)
+                urlWithoutFragment?.fragment = nil
+
+                var currentWithoutFragment = URLComponents(url: currentURL, resolvingAgainstBaseURL: false)
+                currentWithoutFragment?.fragment = nil
+
+                // If base URLs match, it's an anchor link within the same page - allow it
+                if let urlBase = urlWithoutFragment?.url,
+                   let currentBase = currentWithoutFragment?.url,
+                   urlBase == currentBase {
+                    decisionHandler(.allow)
+                    return
+                }
+            }
+
+            // Handle link activations (external links)
             if navigationAction.navigationType == .linkActivated,
                let url = navigationAction.request.url {
+                // Open external links in default browser
                 if let scheme = url.scheme?.lowercased(),
                    Self.allowedSchemes.contains(scheme) {
                     NSWorkspace.shared.open(url)
@@ -490,6 +532,7 @@ struct MarkdownWebView: NSViewRepresentable {
                 decisionHandler(.cancel)
                 return
             }
+
             decisionHandler(.allow)
         }
     }
