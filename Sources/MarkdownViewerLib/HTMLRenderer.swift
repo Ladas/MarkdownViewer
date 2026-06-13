@@ -10,6 +10,9 @@ public enum HTMLRenderer {
         let markedJS = loadResource("marked.min", withExtension: "js", subdirectory: "Resources/vendor") ?? ""
         let mermaidJS = loadResource("mermaid.min", withExtension: "js", subdirectory: "Resources/vendor") ?? ""
         let purifyJS = loadResource("purify.min", withExtension: "js", subdirectory: "Resources/vendor") ?? ""
+        let hljsJS = loadResource("highlight.min", withExtension: "js", subdirectory: "Resources/vendor") ?? ""
+        let hljsLightCSS = loadResource("hljs-github.min", withExtension: "css", subdirectory: "Resources/vendor") ?? ""
+        let hljsDarkCSS = loadResource("hljs-github-dark.min", withExtension: "css", subdirectory: "Resources/vendor") ?? ""
         let template = loadResource("template", withExtension: "html") ?? fallbackTemplate()
         return template
             .replacingOccurrences(of: "/* {{VENDOR_CSS}} */", with: vendorCSS)
@@ -18,6 +21,9 @@ public enum HTMLRenderer {
             .replacingOccurrences(of: "/* {{MARKED_JS}} */", with: markedJS)
             .replacingOccurrences(of: "/* {{MERMAID_JS}} */", with: mermaidJS)
             .replacingOccurrences(of: "/* {{PURIFY_JS}} */", with: purifyJS)
+            .replacingOccurrences(of: "/* {{HLJS_JS}} */", with: hljsJS)
+            .replacingOccurrences(of: "/* {{HLJS_LIGHT_CSS}} */", with: hljsLightCSS)
+            .replacingOccurrences(of: "/* {{HLJS_DARK_CSS}} */", with: hljsDarkCSS)
     }()
 
     private static let preparedChatTemplate: String = {

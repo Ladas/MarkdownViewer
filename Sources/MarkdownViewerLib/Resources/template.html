@@ -8,10 +8,13 @@
     <style>/* {{VENDOR_CSS}} */</style>
     <style>/* {{FA_CSS}} */</style>
     <style>/* {{CSS}} */</style>
+    <style media="(prefers-color-scheme: light)">/* {{HLJS_LIGHT_CSS}} */</style>
+    <style media="(prefers-color-scheme: dark)">/* {{HLJS_DARK_CSS}} */</style>
     <style id="theme-css"></style>
     <script>/* {{PURIFY_JS}} */</script>
     <script>/* {{MARKED_JS}} */</script>
     <script>/* {{MERMAID_JS}} */</script>
+    <script>/* {{HLJS_JS}} */</script>
 </head>
 <body>
     <article class="markdown-body" id="content"></article>
@@ -45,6 +48,15 @@
                         heading.id = slugify(heading.textContent);
                     }
                 });
+
+                // Syntax highlighting — skip mermaid and review blocks
+                if (typeof hljs !== 'undefined') {
+                    document.querySelectorAll('pre code').forEach(function(el) {
+                        if (!el.classList.contains('language-mermaid') && !el.classList.contains('language-review')) {
+                            hljs.highlightElement(el);
+                        }
+                    });
+                }
             } else {
                 // Fail closed: refuse to render unsanitized HTML
                 var safeEl = document.getElementById('content');
