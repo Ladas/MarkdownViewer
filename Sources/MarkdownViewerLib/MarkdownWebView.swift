@@ -421,12 +421,52 @@ struct MarkdownWebView: NSViewRepresentable {
         }
 
         private func handleCopyGoogleDocs(_ message: WKScriptMessage) {
-            guard let html = message.body as? String else { return }
+            guard let html = message.body as? String,
+                  let webView = message.webView else { return }
+            // Convert local image paths to data URIs so they survive clipboard paste
+            let baseURL = webView.url?.deletingLastPathComponent()
+            let processed = Self.inlineLocalImages(html, baseURL: baseURL)
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             // Only .html — Google Docs reads this as rich content fragment
-            pasteboard.setString(html, forType: .html)
+            pasteboard.setString(processed, forType: .html)
             onCopyDone?()
+        }
+
+        private static func inlineLocalImages(_ html: String, baseURL: URL?) -> String {
+            guard let baseURL = baseURL else { return html }
+            var result = html
+            let pattern = try! NSRegularExpression(pattern: #"<img\s[^>]*src="([^"]+)"[^>]*>"#, options: [])
+            let matches = pattern.matches(in: html, range: NSRange(html.startIndex..., in: html))
+            for match in matches.reversed() {
+                guard let srcRange = Range(match.range(at: 1), in: html) else { continue }
+                let src = String(html[srcRange])
+                if src.hasPrefix("data:") || src.hasPrefix("http") { continue }
+
+                let fileURL: URL
+                if src.hasPrefix("file://") {
+                    fileURL = URL(string: src) ?? baseURL.appendingPathComponent(src)
+                } else {
+                    fileURL = baseURL.appendingPathComponent(src)
+                }
+
+                guard let data = try? Data(contentsOf: fileURL) else { continue }
+
+                // Convert all images to PNG — Google Docs doesn't render SVG data URIs
+                let pngData: Data
+                if let image = NSImage(data: data) {
+                    guard let tiff = image.tiffRepresentation,
+                          let bitmap = NSBitmapImageRep(data: tiff),
+                          let png = bitmap.representation(using: .png, properties: [:]) else { continue }
+                    pngData = png
+                } else {
+                    continue
+                }
+
+                let dataURI = "data:image/png;base64,\(pngData.base64EncodedString())"
+                result = result.replacingCharacters(in: Range(match.range(at: 1), in: result)!, with: dataURI)
+            }
+            return result
         }
 
         private func handleExportHTML(_ message: WKScriptMessage) {
