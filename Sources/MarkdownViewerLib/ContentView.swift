@@ -192,6 +192,7 @@ public struct ContentView: View {
     @State private var viewMode: ViewMode = .preview
     private static let cachedThemes = MermaidThemeManager.loadThemes()
     @State private var mermaidTheme: MermaidTheme = cachedThemes[0]
+    @State private var hasRestoredTheme = false
     @State private var themeVersion: Int = 0
     @State private var availableThemes: [MermaidTheme] = cachedThemes
     @State private var showComments = false
@@ -357,6 +358,13 @@ public struct ContentView: View {
             if let url = fileURL {
                 inlineCommentStore = InlineCommentStore(fileURL: url)
                 inlineComments = inlineCommentStore?.load() ?? []
+            }
+            if !hasRestoredTheme {
+                hasRestoredTheme = true
+                if let savedId = UserDefaults.standard.string(forKey: "selectedThemeId"),
+                   let saved = availableThemes.first(where: { $0.id == savedId }) {
+                    selectMermaidTheme(saved)
+                }
             }
         }
         .onDisappear {
@@ -1036,6 +1044,7 @@ public struct ContentView: View {
 
     private func selectMermaidTheme(_ theme: MermaidTheme) {
         mermaidTheme = theme
+        UserDefaults.standard.set(theme.id, forKey: "selectedThemeId")
         // If current appearance isn't supported by new theme, switch to a supported one
         if !theme.supportedAppearances.contains(appearanceMode) {
             if theme.supportedAppearances.contains("light") {
