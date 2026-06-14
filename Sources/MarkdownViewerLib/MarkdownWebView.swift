@@ -561,12 +561,14 @@ struct MarkdownWebView: NSViewRepresentable {
                 }
             }
 
-            // Handle link activations (external links)
+            // Handle link activations
             if navigationAction.navigationType == .linkActivated,
                let url = navigationAction.request.url {
-                // Open external links in default browser
-                if let scheme = url.scheme?.lowercased(),
-                   Self.allowedSchemes.contains(scheme) {
+                if url.isFileURL {
+                    // Local file link — open in this app (e.g. docs/tasks.md)
+                    NSWorkspace.shared.open(url, configuration: .init(), completionHandler: nil)
+                } else if let scheme = url.scheme?.lowercased(),
+                          Self.allowedSchemes.contains(scheme) {
                     NSWorkspace.shared.open(url)
                 }
                 decisionHandler(.cancel)
