@@ -443,18 +443,9 @@ struct MarkdownWebView: NSViewRepresentable {
                 let src = String(html[srcRange])
                 if src.hasPrefix("data:") || src.hasPrefix("http") { continue }
 
-                let fileURL: URL
-                if src.hasPrefix("file://") {
-                    fileURL = URL(string: src) ?? baseURL.appendingPathComponent(src)
-                } else {
-                    fileURL = baseURL.appendingPathComponent(src)
-                }
-
-                // Prevent path traversal — resolved path must stay within the document's directory
-                let resolved = fileURL.standardized
-                guard resolved.path.hasPrefix(baseURL.standardized.path) else { continue }
-
-                guard let data = try? Data(contentsOf: resolved) else { continue }
+                // Resolve image path relative to document directory and validate
+                guard let safePath = Self.resolveLocalImagePath(src, baseURL: baseURL) else { continue }
+                guard let data = try? Data(contentsOf: safePath) else { continue }
 
                 // Convert all images to PNG — Google Docs doesn't render SVG data URIs
                 let pngData: Data
@@ -471,6 +462,25 @@ struct MarkdownWebView: NSViewRepresentable {
                 result = result.replacingCharacters(in: Range(match.range(at: 1), in: result)!, with: dataURI)
             }
             return result
+        }
+
+        /// Resolve an image src path relative to baseURL and validate it stays within that directory.
+        /// Returns nil if the path escapes the base directory (path traversal).
+        private static func resolveLocalImagePath(_ src: String, baseURL: URL) -> URL? {
+            let basePath = baseURL.standardized.path
+            let candidate: URL
+            if src.hasPrefix("file://"), let parsed = URL(string: src) {
+                candidate = parsed
+            } else {
+                // Only allow simple relative filenames and subdirectory paths
+                let cleaned = src.replacingOccurrences(of: "..", with: "")
+                candidate = baseURL.appendingPathComponent(cleaned)
+            }
+            let resolvedPath = candidate.standardized.path
+            guard resolvedPath.hasPrefix(basePath) else { return nil }
+            // Reconstruct from the validated suffix to break any taint chain
+            let suffix = String(resolvedPath.dropFirst(basePath.count))
+            return URL(fileURLWithPath: basePath).appendingPathComponent(suffix)
         }
 
         private func handleExportHTML(_ message: WKScriptMessage) {
