@@ -5,8 +5,8 @@ import UniformTypeIdentifiers
 
 struct MarkdownWebView: NSViewRepresentable {
     let markdown: String
+    var fileURL: URL?
     var overrideHTML: String?
-    var baseURL: URL?
     var searchText: String = ""
     var navigationTrigger: Int = 0
     var navigationForward: Bool = true
@@ -49,7 +49,9 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.allowsMagnification = true
         context.coordinator.lastMarkdown = markdown
         context.coordinator.lastOverrideHTML = overrideHTML
+        context.coordinator.fileURL = fileURL
 
+        let baseURL = fileURL?.deletingLastPathComponent()
         var html = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
         html = injectTheme(html)
         loadHTML(html, in: webView, baseURL: baseURL)
@@ -67,7 +69,9 @@ struct MarkdownWebView: NSViewRepresentable {
         coord.onExplainWithClaude = onExplainWithClaude
         coord.onAskClaude = onAskClaude
 
-        // Check if a full page reload is needed
+        coord.fileURL = fileURL
+        let baseURL = fileURL?.deletingLastPathComponent()
+
         let contentChanged = coord.lastMarkdown != markdown || coord.lastOverrideHTML != overrideHTML
         let themeChanged = coord.lastThemeVersion != themeVersion
         let appearanceChanged = coord.lastAppearanceMode != appearanceMode
@@ -198,9 +202,41 @@ struct MarkdownWebView: NSViewRepresentable {
         Coordinator()
     }
 
-    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
-        private static let allowedSchemes: Set<String> = ["http", "https", "mailto"]
+    enum LinkAction: Equatable {
+        case openMarkdownTab(URL)
+        case openExternal(URL)
+        case cancel
+    }
 
+    static func classifyLink(url: URL, fileURL: URL?) -> LinkAction {
+        let scheme = url.scheme?.lowercased() ?? ""
+
+        if scheme == "file" || scheme.isEmpty {
+            let resolved: URL
+            if scheme == "file" {
+                resolved = url
+            } else if let base = fileURL?.deletingLastPathComponent() {
+                resolved = base.appendingPathComponent(url.path)
+            } else {
+                return .cancel
+            }
+            let ext = resolved.pathExtension.lowercased()
+            if markdownExtensions.contains(ext) {
+                return .openMarkdownTab(resolved)
+            }
+            return .cancel
+        } else if allowedSchemes.contains(scheme) {
+            return .openExternal(url)
+        }
+        return .cancel
+    }
+
+    static let allowedSchemes: Set<String> = ["http", "https", "mailto"]
+    static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn"]
+
+    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+
+        var fileURL: URL?
         var lastMarkdown: String?
         var lastOverrideHTML: String?
         var lastThemeVersion: Int = 0
@@ -351,7 +387,7 @@ struct MarkdownWebView: NSViewRepresentable {
                   let y = params["y"] as? Double,
                   let width = params["width"] as? Double,
                   let height = params["height"] as? Double,
-                  let duration = params["duration"] as? Double,
+                  let _ = params["duration"] as? Double,
                   let frameCount = params["frames"] as? Int else { return }
 
             let rect = CGRect(x: x, y: y, width: width, height: height)
@@ -572,20 +608,33 @@ struct MarkdownWebView: NSViewRepresentable {
                 }
             }
 
-            // Handle link activations
             if navigationAction.navigationType == .linkActivated,
                let url = navigationAction.request.url {
-                if url.isFileURL {
-                    // Local file link — open in this app (e.g. docs/tasks.md)
-                    NSWorkspace.shared.open(url, configuration: .init(), completionHandler: nil)
-                } else if let scheme = url.scheme?.lowercased(),
-                          Self.allowedSchemes.contains(scheme) {
-                    NSWorkspace.shared.open(url)
+                switch MarkdownWebView.classifyLink(url: url, fileURL: fileURL) {
+                case .openMarkdownTab(let resolved):
+                    if FileManager.default.fileExists(atPath: resolved.path) {
+                        let sourceWindow = webView.window
+                        let existingWindows = Set(NSApp.windows)
+                        NSDocumentController.shared.openDocument(
+                            withContentsOf: resolved, display: true
+                        ) { _, _, _ in
+                            guard let sourceWindow = sourceWindow else { return }
+                            if let newWindow = NSApp.windows.first(where: {
+                                !existingWindows.contains($0) && $0 !== sourceWindow
+                            }) {
+                                sourceWindow.addTabbedWindow(newWindow, ordered: .above)
+                                newWindow.makeKeyAndOrderFront(nil)
+                            }
+                        }
+                    }
+                case .openExternal(let externalURL):
+                    NSWorkspace.shared.open(externalURL)
+                case .cancel:
+                    break
                 }
                 decisionHandler(.cancel)
                 return
             }
-
             decisionHandler(.allow)
         }
     }
