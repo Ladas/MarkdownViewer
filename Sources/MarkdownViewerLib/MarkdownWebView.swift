@@ -435,6 +435,24 @@ struct MarkdownWebView: NSViewRepresentable {
 
         private static func inlineLocalImages(_ html: String, baseURL: URL?) -> String {
             guard let baseURL = baseURL else { return html }
+
+            // Build an index of actual image files in the document's directory (no user input in paths)
+            let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "svg", "webp"]
+            var fileIndex: [String: URL] = [:]
+            if let enumerator = FileManager.default.enumerator(
+                at: baseURL, includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) {
+                for case let fileURL as URL in enumerator {
+                    if imageExtensions.contains(fileURL.pathExtension.lowercased()) {
+                        let relativePath = fileURL.standardized.path
+                            .dropFirst(baseURL.standardized.path.count)
+                            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                        fileIndex[relativePath] = fileURL
+                    }
+                }
+            }
+
             var result = html
             let pattern = try! NSRegularExpression(pattern: #"<img\s[^>]*src="([^"]+)"[^>]*>"#, options: [])
             let matches = pattern.matches(in: html, range: NSRange(html.startIndex..., in: html))
@@ -443,44 +461,23 @@ struct MarkdownWebView: NSViewRepresentable {
                 let src = String(html[srcRange])
                 if src.hasPrefix("data:") || src.hasPrefix("http") { continue }
 
-                // Resolve image path relative to document directory and validate
-                guard let safePath = Self.resolveLocalImagePath(src, baseURL: baseURL) else { continue }
-                guard let data = try? Data(contentsOf: safePath) else { continue }
+                // Look up src in the pre-built index of known image files
+                let lookupKey = src.removingPercentEncoding ?? src
+                guard let safeURL = fileIndex[lookupKey] else { continue }
+
+                // Read from the index-derived path (not from user input)
+                guard let data = try? Data(contentsOf: safeURL) else { continue }
 
                 // Convert all images to PNG — Google Docs doesn't render SVG data URIs
-                let pngData: Data
-                if let image = NSImage(data: data) {
-                    guard let tiff = image.tiffRepresentation,
-                          let bitmap = NSBitmapImageRep(data: tiff),
-                          let png = bitmap.representation(using: .png, properties: [:]) else { continue }
-                    pngData = png
-                } else {
-                    continue
-                }
+                guard let image = NSImage(data: data),
+                      let tiff = image.tiffRepresentation,
+                      let bitmap = NSBitmapImageRep(data: tiff),
+                      let pngData = bitmap.representation(using: .png, properties: [:]) else { continue }
 
                 let dataURI = "data:image/png;base64,\(pngData.base64EncodedString())"
                 result = result.replacingCharacters(in: Range(match.range(at: 1), in: result)!, with: dataURI)
             }
             return result
-        }
-
-        /// Resolve an image src path relative to baseURL and validate it stays within that directory.
-        /// Returns nil if the path escapes the base directory (path traversal).
-        private static func resolveLocalImagePath(_ src: String, baseURL: URL) -> URL? {
-            let basePath = baseURL.standardized.path
-            let candidate: URL
-            if src.hasPrefix("file://"), let parsed = URL(string: src) {
-                candidate = parsed
-            } else {
-                // Only allow simple relative filenames and subdirectory paths
-                let cleaned = src.replacingOccurrences(of: "..", with: "")
-                candidate = baseURL.appendingPathComponent(cleaned)
-            }
-            let resolvedPath = candidate.standardized.path
-            guard resolvedPath.hasPrefix(basePath) else { return nil }
-            // Reconstruct from the validated suffix to break any taint chain
-            let suffix = String(resolvedPath.dropFirst(basePath.count))
-            return URL(fileURLWithPath: basePath).appendingPathComponent(suffix)
         }
 
         private func handleExportHTML(_ message: WKScriptMessage) {
