@@ -212,13 +212,17 @@ struct MarkdownWebView: NSViewRepresentable {
         let scheme = url.scheme?.lowercased() ?? ""
 
         if scheme == "file" || scheme.isEmpty {
-            let resolved: URL
+            let raw: URL
             if scheme == "file" {
-                resolved = url
+                raw = url
             } else if let base = fileURL?.deletingLastPathComponent() {
-                resolved = base.appendingPathComponent(url.path)
+                raw = base.appendingPathComponent(url.path)
             } else {
                 return .cancel
+            }
+            let resolved = raw.standardizedFileURL
+            if let base = fileURL?.deletingLastPathComponent().standardizedFileURL {
+                guard resolved.path.hasPrefix(base.path) else { return .cancel }
             }
             let ext = resolved.pathExtension.lowercased()
             if markdownExtensions.contains(ext) {
@@ -229,6 +233,31 @@ struct MarkdownWebView: NSViewRepresentable {
             return .openExternal(url)
         }
         return .cancel
+    }
+
+    /// Resolve a relative path within baseDir using directory listings as the
+    /// trusted source, so that user-provided path components never flow into
+    /// filesystem operations. Returns nil if any component is missing or
+    /// contains traversal sequences.
+    static func resolveInDirectory(relativePath: String, baseDir: URL) -> URL? {
+        let parts = relativePath.components(separatedBy: "/").filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return nil }
+        guard parts.allSatisfy({ $0 != ".." && $0 != "." }) else { return nil }
+
+        var current = baseDir
+        for (i, requested) in parts.enumerated() {
+            guard let entries = try? FileManager.default.contentsOfDirectory(atPath: current.path),
+                  let matched = entries.first(where: { $0 == requested }) else {
+                return nil
+            }
+            current = current.appendingPathComponent(matched)
+            if i < parts.count - 1 {
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: current.path, isDirectory: &isDir),
+                      isDir.boolValue else { return nil }
+            }
+        }
+        return current
     }
 
     static let allowedSchemes: Set<String> = ["http", "https", "mailto"]
@@ -611,12 +640,16 @@ struct MarkdownWebView: NSViewRepresentable {
             if navigationAction.navigationType == .linkActivated,
                let url = navigationAction.request.url {
                 switch MarkdownWebView.classifyLink(url: url, fileURL: fileURL) {
-                case .openMarkdownTab(let resolved):
-                    if FileManager.default.fileExists(atPath: resolved.path) {
+                case .openMarkdownTab(_):
+                    // Resolve path via directory listings (trusted source) to avoid
+                    // user-controlled data flowing into filesystem operations.
+                    if let baseDir = fileURL?.deletingLastPathComponent(),
+                       let safeURL = MarkdownWebView.resolveInDirectory(
+                           relativePath: url.relativePath, baseDir: baseDir) {
                         let sourceWindow = webView.window
                         let existingWindows = Set(NSApp.windows)
                         NSDocumentController.shared.openDocument(
-                            withContentsOf: resolved, display: true
+                            withContentsOf: safeURL, display: true
                         ) { _, _, _ in
                             guard let sourceWindow = sourceWindow else { return }
                             if let newWindow = NSApp.windows.first(where: {
