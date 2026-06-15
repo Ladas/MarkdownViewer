@@ -450,7 +450,11 @@ struct MarkdownWebView: NSViewRepresentable {
                     fileURL = baseURL.appendingPathComponent(src)
                 }
 
-                guard let data = try? Data(contentsOf: fileURL) else { continue }
+                // Prevent path traversal — resolved path must stay within the document's directory
+                let resolved = fileURL.standardized
+                guard resolved.path.hasPrefix(baseURL.standardized.path) else { continue }
+
+                guard let data = try? Data(contentsOf: resolved) else { continue }
 
                 // Convert all images to PNG — Google Docs doesn't render SVG data URIs
                 let pngData: Data
