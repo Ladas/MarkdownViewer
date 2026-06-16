@@ -4,14 +4,17 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https: file:; font-src data:;">
+          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: https: file:; font-src data:; connect-src file:;">
     <style>/* {{VENDOR_CSS}} */</style>
     <style>/* {{FA_CSS}} */</style>
     <style>/* {{CSS}} */</style>
+    <style media="(prefers-color-scheme: light)">/* {{HLJS_LIGHT_CSS}} */</style>
+    <style media="(prefers-color-scheme: dark)">/* {{HLJS_DARK_CSS}} */</style>
     <style id="theme-css"></style>
     <script>/* {{PURIFY_JS}} */</script>
     <script>/* {{MARKED_JS}} */</script>
     <script>/* {{MERMAID_JS}} */</script>
+    <script>/* {{HLJS_JS}} */</script>
 </head>
 <body>
     <article class="markdown-body" id="content"></article>
@@ -45,6 +48,15 @@
                         heading.id = slugify(heading.textContent);
                     }
                 });
+
+                // Syntax highlighting — skip mermaid and review blocks
+                if (typeof hljs !== 'undefined') {
+                    document.querySelectorAll('pre code').forEach(function(el) {
+                        if (!el.classList.contains('language-mermaid') && !el.classList.contains('language-review')) {
+                            hljs.highlightElement(el);
+                        }
+                    });
+                }
             } else {
                 // Fail closed: refuse to render unsanitized HTML
                 var safeEl = document.getElementById('content');
@@ -948,10 +960,52 @@
                 img.style.maxWidth = '100%';
             });
 
+            // Inject theme logo (from CSS ::before pseudo-element) as real <img> for GDoc
+            var firstH1 = clone.querySelector('h1');
+            if (firstH1) {
+                var origH1 = content.querySelector('h1');
+                if (origH1) {
+                    var beforeStyle = window.getComputedStyle(origH1, '::before');
+                    var bgImage = beforeStyle.backgroundImage;
+                    if (bgImage && bgImage !== 'none') {
+                        var urlMatch = bgImage.match(/url\("?([^"]*)"?\)/);
+                        if (urlMatch && urlMatch[1]) {
+                            var logoImg = document.createElement('img');
+                            logoImg.src = urlMatch[1];
+                            // Use the rendered ::before dimensions to size the GDoc logo
+                            var bw = parseFloat(beforeStyle.width) || 0;
+                            var bh = parseFloat(beforeStyle.height) || 0;
+                            if (bw > 0 && bh > 0) {
+                                logoImg.setAttribute('width', String(Math.round(bw)));
+                                logoImg.setAttribute('height', String(Math.round(bh)));
+                            } else {
+                                // Fallback: use natural dimensions scaled to reasonable height
+                                var tmpImg = new Image();
+                                tmpImg.src = urlMatch[1];
+                                var natW = tmpImg.naturalWidth || 1;
+                                var natH = tmpImg.naturalHeight || 1;
+                                var targetH = 60;
+                                logoImg.setAttribute('width', String(Math.round(targetH * natW / natH)));
+                                logoImg.setAttribute('height', String(targetH));
+                            }
+                            logoImg.style.cssText = 'display:block;margin-bottom:6px;';
+                            firstH1.style.marginTop = '0';
+                            firstH1.parentNode.insertBefore(logoImg, firstH1);
+                        }
+                    }
+                }
+            }
+
             clone.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h) {
                 h.removeAttribute('style');
                 h.style.color = hColor;
+                h.style.margin = '16px 0 8px 0';
             });
+            // First h1 after logo needs no top margin
+            var cloneFirstH1 = clone.querySelector('h1');
+            if (cloneFirstH1 && cloneFirstH1.previousElementSibling && cloneFirstH1.previousElementSibling.tagName === 'IMG') {
+                cloneFirstH1.style.marginTop = '4px';
+            }
             clone.querySelectorAll('h1,h2').forEach(function(h) {
                 h.style.borderBottom = '1px solid ' + h1Border;
                 h.style.paddingBottom = '8px';

@@ -421,12 +421,63 @@ struct MarkdownWebView: NSViewRepresentable {
         }
 
         private func handleCopyGoogleDocs(_ message: WKScriptMessage) {
-            guard let html = message.body as? String else { return }
+            guard let html = message.body as? String,
+                  let webView = message.webView else { return }
+            // Convert local image paths to data URIs so they survive clipboard paste
+            let baseURL = webView.url?.deletingLastPathComponent()
+            let processed = Self.inlineLocalImages(html, baseURL: baseURL)
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             // Only .html — Google Docs reads this as rich content fragment
-            pasteboard.setString(html, forType: .html)
+            pasteboard.setString(processed, forType: .html)
             onCopyDone?()
+        }
+
+        private static func inlineLocalImages(_ html: String, baseURL: URL?) -> String {
+            guard let baseURL = baseURL else { return html }
+
+            // Build an index of actual image files in the document's directory (no user input in paths)
+            let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "svg", "webp"]
+            var fileIndex: [String: URL] = [:]
+            if let enumerator = FileManager.default.enumerator(
+                at: baseURL, includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) {
+                for case let fileURL as URL in enumerator {
+                    if imageExtensions.contains(fileURL.pathExtension.lowercased()) {
+                        let relativePath = fileURL.standardized.path
+                            .dropFirst(baseURL.standardized.path.count)
+                            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                        fileIndex[relativePath] = fileURL
+                    }
+                }
+            }
+
+            var result = html
+            let pattern = try! NSRegularExpression(pattern: #"<img\s[^>]*src="([^"]+)"[^>]*>"#, options: [])
+            let matches = pattern.matches(in: html, range: NSRange(html.startIndex..., in: html))
+            for match in matches.reversed() {
+                guard let srcRange = Range(match.range(at: 1), in: html) else { continue }
+                let src = String(html[srcRange])
+                if src.hasPrefix("data:") || src.hasPrefix("http") { continue }
+
+                // Look up src in the pre-built index of known image files
+                let lookupKey = src.removingPercentEncoding ?? src
+                guard let safeURL = fileIndex[lookupKey] else { continue }
+
+                // Read from the index-derived path (not from user input)
+                guard let data = try? Data(contentsOf: safeURL) else { continue }
+
+                // Convert all images to PNG — Google Docs doesn't render SVG data URIs
+                guard let image = NSImage(data: data),
+                      let tiff = image.tiffRepresentation,
+                      let bitmap = NSBitmapImageRep(data: tiff),
+                      let pngData = bitmap.representation(using: .png, properties: [:]) else { continue }
+
+                let dataURI = "data:image/png;base64,\(pngData.base64EncodedString())"
+                result = result.replacingCharacters(in: Range(match.range(at: 1), in: result)!, with: dataURI)
+            }
+            return result
         }
 
         private func handleExportHTML(_ message: WKScriptMessage) {
@@ -521,12 +572,14 @@ struct MarkdownWebView: NSViewRepresentable {
                 }
             }
 
-            // Handle link activations (external links)
+            // Handle link activations
             if navigationAction.navigationType == .linkActivated,
                let url = navigationAction.request.url {
-                // Open external links in default browser
-                if let scheme = url.scheme?.lowercased(),
-                   Self.allowedSchemes.contains(scheme) {
+                if url.isFileURL {
+                    // Local file link — open in this app (e.g. docs/tasks.md)
+                    NSWorkspace.shared.open(url, configuration: .init(), completionHandler: nil)
+                } else if let scheme = url.scheme?.lowercased(),
+                          Self.allowedSchemes.contains(scheme) {
                     NSWorkspace.shared.open(url)
                 }
                 decisionHandler(.cancel)
