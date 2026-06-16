@@ -972,9 +972,24 @@
                         if (urlMatch && urlMatch[1]) {
                             var logoImg = document.createElement('img');
                             logoImg.src = urlMatch[1];
-                            logoImg.setAttribute('width', '120');
-                            logoImg.setAttribute('height', '28');
-                            logoImg.style.cssText = 'display:block;margin-bottom:8px;';
+                            // Use the rendered ::before dimensions to size the GDoc logo
+                            var bw = parseFloat(beforeStyle.width) || 0;
+                            var bh = parseFloat(beforeStyle.height) || 0;
+                            if (bw > 0 && bh > 0) {
+                                logoImg.setAttribute('width', String(Math.round(bw)));
+                                logoImg.setAttribute('height', String(Math.round(bh)));
+                            } else {
+                                // Fallback: use natural dimensions scaled to reasonable height
+                                var tmpImg = new Image();
+                                tmpImg.src = urlMatch[1];
+                                var natW = tmpImg.naturalWidth || 1;
+                                var natH = tmpImg.naturalHeight || 1;
+                                var targetH = 60;
+                                logoImg.setAttribute('width', String(Math.round(targetH * natW / natH)));
+                                logoImg.setAttribute('height', String(targetH));
+                            }
+                            logoImg.style.cssText = 'display:block;margin-bottom:6px;';
+                            firstH1.style.marginTop = '0';
                             firstH1.parentNode.insertBefore(logoImg, firstH1);
                         }
                     }
@@ -984,7 +999,13 @@
             clone.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h) {
                 h.removeAttribute('style');
                 h.style.color = hColor;
+                h.style.margin = '16px 0 8px 0';
             });
+            // First h1 after logo needs no top margin
+            var cloneFirstH1 = clone.querySelector('h1');
+            if (cloneFirstH1 && cloneFirstH1.previousElementSibling && cloneFirstH1.previousElementSibling.tagName === 'IMG') {
+                cloneFirstH1.style.marginTop = '4px';
+            }
             clone.querySelectorAll('h1,h2').forEach(function(h) {
                 h.style.borderBottom = '1px solid ' + h1Border;
                 h.style.paddingBottom = '8px';
