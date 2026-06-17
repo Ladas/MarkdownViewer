@@ -163,3 +163,34 @@ struct RenderTests {
         #expect(!result.isEmpty)
     }
 }
+
+@Suite("HTMLRenderer - CSP and Security")
+struct CSPTests {
+
+    @Test func cspAllowsFileProtocolInImgSrc() {
+        let html = HTMLRenderer.render(markdown: "test")
+        #expect(html.contains("img-src data: https: file:"),
+                "CSP img-src must include file: for local image rendering")
+    }
+
+    @Test func cspPresent() {
+        let html = HTMLRenderer.render(markdown: "test")
+        #expect(html.contains("Content-Security-Policy"))
+    }
+
+    @Test func cspDefaultSrcNone() {
+        let html = HTMLRenderer.render(markdown: "test")
+        #expect(html.contains("default-src 'none'"))
+    }
+
+    @Test func templateContainsSlugifyForHeadingIDs() {
+        let html = HTMLRenderer.render(markdown: "# Heading")
+        #expect(html.contains("function slugify"))
+    }
+
+    @Test func templateHasAnchorClickHandler() {
+        let html = HTMLRenderer.render(markdown: "test")
+        // Anchor link scrolling is handled in JS via click event listener
+        #expect(html.contains("scrollIntoView"))
+    }
+}
