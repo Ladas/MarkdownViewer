@@ -177,6 +177,111 @@ struct LinkNavigationTests {
     }
 }
 
+// MARK: - Temp file location
+
+@Suite("Link Navigation - Temp File Location")
+struct TempFileLocationTests {
+
+    // The temp file MUST be in the same directory as the markdown file.
+    // When it was in the parent directory, WKWebView resolved relative links one
+    // level too high (e.g. "other.md" → "evals/other.md" instead of
+    // "evals/2026-06-19/other.md"), causing classifyLink to cancel every link.
+
+    @Test func tempFileIsInsideFileDirectory() {
+        let fileURL = URL(fileURLWithPath: "/Users/test/docs/report.md")
+        let baseDir = fileURL.deletingLastPathComponent()
+        let tempURL = MarkdownWebView.tempFileURL(inDirectory: baseDir)
+
+        #expect(tempURL.deletingLastPathComponent().standardizedFileURL == baseDir.standardizedFileURL)
+    }
+
+    @Test func tempFileIsNotInParentDirectory() {
+        let fileURL = URL(fileURLWithPath: "/Users/test/docs/report.md")
+        let baseDir = fileURL.deletingLastPathComponent()
+        let tempURL = MarkdownWebView.tempFileURL(inDirectory: baseDir)
+        let parentDir = baseDir.deletingLastPathComponent()
+
+        #expect(tempURL.deletingLastPathComponent().standardizedFileURL != parentDir.standardizedFileURL)
+    }
+
+    @Test func tempFileNameIsHidden() {
+        let baseDir = URL(fileURLWithPath: "/Users/test/docs", isDirectory: true)
+        let tempURL = MarkdownWebView.tempFileURL(inDirectory: baseDir)
+        #expect(tempURL.lastPathComponent.hasPrefix("."))
+    }
+
+    // Simulate exactly what WKWebView does: when loaded with tempURL as the base,
+    // a relative link "other.md" resolves to tempURL's directory + "other.md".
+    // classifyLink must accept this resolved URL.
+    @Test func relativeLinkFromTempFileResolvesIntoSameDirectory() {
+        let fileURL = URL(fileURLWithPath: "/Users/test/docs/report.md")
+        let baseDir = fileURL.deletingLastPathComponent()
+        let tempURL = MarkdownWebView.tempFileURL(inDirectory: baseDir)
+
+        // WKWebView resolves "other.md" against tempURL → same directory as fileURL
+        let navigationURL = tempURL.deletingLastPathComponent()
+            .appendingPathComponent("other.md")
+
+        let result = MarkdownWebView.classifyLink(url: navigationURL, fileURL: fileURL)
+        #expect(result == .openMarkdownTab(navigationURL.standardizedFileURL))
+    }
+
+    // Regression: with the old code tempURL was in the PARENT directory, so
+    // WKWebView resolved relative links one level too high and classifyLink
+    // cancelled them because they were outside the file's directory.
+    @Test func regressionTempFileInParentDirectoryBreaksLinks() {
+        let fileURL = URL(fileURLWithPath: "/Users/test/docs/report.md")
+        let baseDir = fileURL.deletingLastPathComponent()
+
+        // Simulate the OLD (broken) temp file location: parent of baseDir
+        let brokenTempURL = baseDir.deletingLastPathComponent()
+            .appendingPathComponent(".markdown-viewer-temp.html")
+
+        // WKWebView would have resolved "other.md" against the parent dir
+        let navigationURL = brokenTempURL.deletingLastPathComponent()
+            .appendingPathComponent("other.md")
+
+        // classifyLink must CANCEL this — the resolved URL is outside baseDir
+        let result = MarkdownWebView.classifyLink(url: navigationURL, fileURL: fileURL)
+        #expect(result == .cancel)
+    }
+
+    // Full chain with real files: correct temp file location → relative link
+    // resolves correctly → resolveInDirectory finds the file.
+    @Test func fullChainWithCorrectTempFileLocation() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("temp-loc-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let fileURL = dir.appendingPathComponent("report.md")
+        let targetFile = dir.appendingPathComponent("other.md")
+        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+        FileManager.default.createFile(atPath: targetFile.path, contents: nil)
+
+        let baseDir = fileURL.deletingLastPathComponent()
+        let tempURL = MarkdownWebView.tempFileURL(inDirectory: baseDir)
+
+        // WKWebView resolves "other.md" from tempURL → should land in same dir
+        let navigationURL = tempURL.deletingLastPathComponent()
+            .appendingPathComponent("other.md")
+
+        let action = MarkdownWebView.classifyLink(url: navigationURL, fileURL: fileURL)
+        guard case .openMarkdownTab(let resolvedURL) = action else {
+            Issue.record("Expected openMarkdownTab, got \(action)")
+            return
+        }
+
+        let relPath = MarkdownWebView.relativePathInDirectory(
+            resolvedURL: resolvedURL, baseDir: baseDir)
+        #expect(relPath == "other.md")
+
+        let safeURL = MarkdownWebView.resolveInDirectory(
+            relativePath: relPath!, baseDir: baseDir)
+        #expect(safeURL == targetFile)
+    }
+}
+
 // MARK: - classifyLink with fully-resolved file:// URLs (as WKWebView provides)
 
 @Suite("Link Navigation - classifyLink with file:// URLs")

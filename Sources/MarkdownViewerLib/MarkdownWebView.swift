@@ -162,15 +162,14 @@ struct MarkdownWebView: NSViewRepresentable {
             return
         }
 
-        // Write HTML to a temporary file in the same directory to grant read access
-        let tempURL = baseURL.deletingLastPathComponent().appendingPathComponent(".markdown-viewer-temp.html")
+        // Write HTML to a temp file in the file's own directory so WKWebView
+        // resolves relative links against that directory, not a parent.
+        let tempURL = MarkdownWebView.tempFileURL(inDirectory: baseURL)
         do {
             try html.write(to: tempURL, atomically: true, encoding: .utf8)
-            // loadFileURL grants read access to the entire directory
-            webView.loadFileURL(tempURL, allowingReadAccessTo: baseURL.deletingLastPathComponent())
+            webView.loadFileURL(tempURL, allowingReadAccessTo: baseURL)
         } catch {
-            // Fallback to loadHTMLString if file write fails
-            webView.loadHTMLString(html, baseURL: baseURL.deletingLastPathComponent())
+            webView.loadHTMLString(html, baseURL: baseURL)
         }
     }
 
@@ -258,6 +257,13 @@ struct MarkdownWebView: NSViewRepresentable {
             }
         }
         return current
+    }
+
+    /// Returns the URL of the temporary HTML file used to load content for a given
+    /// directory. The temp file must live in the same directory as the markdown file
+    /// so WKWebView resolves relative links against that directory.
+    static func tempFileURL(inDirectory baseDir: URL) -> URL {
+        baseDir.appendingPathComponent(".markdown-viewer-temp.html")
     }
 
     /// Returns the path of resolvedURL relative to baseDir, or nil if resolvedURL
