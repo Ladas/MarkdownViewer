@@ -162,15 +162,14 @@ struct MarkdownWebView: NSViewRepresentable {
             return
         }
 
-        // Write HTML to a temporary file in the same directory to grant read access
-        let tempURL = baseURL.deletingLastPathComponent().appendingPathComponent(".markdown-viewer-temp.html")
+        // Write HTML to a temp file in the file's own directory so WKWebView
+        // resolves relative links against that directory, not a parent.
+        let tempURL = MarkdownWebView.tempFileURL(inDirectory: baseURL)
         do {
             try html.write(to: tempURL, atomically: true, encoding: .utf8)
-            // loadFileURL grants read access to the entire directory
-            webView.loadFileURL(tempURL, allowingReadAccessTo: baseURL.deletingLastPathComponent())
+            webView.loadFileURL(tempURL, allowingReadAccessTo: baseURL)
         } catch {
-            // Fallback to loadHTMLString if file write fails
-            webView.loadHTMLString(html, baseURL: baseURL.deletingLastPathComponent())
+            webView.loadHTMLString(html, baseURL: baseURL)
         }
     }
 
@@ -258,6 +257,24 @@ struct MarkdownWebView: NSViewRepresentable {
             }
         }
         return current
+    }
+
+    /// Returns the URL of the temporary HTML file used to load content for a given
+    /// directory. The temp file must live in the same directory as the markdown file
+    /// so WKWebView resolves relative links against that directory.
+    static func tempFileURL(inDirectory baseDir: URL) -> URL {
+        baseDir.appendingPathComponent(".markdown-viewer-temp.html")
+    }
+
+    /// Returns the path of resolvedURL relative to baseDir, or nil if resolvedURL
+    /// is not strictly inside baseDir (i.e. not a descendant).
+    static func relativePathInDirectory(resolvedURL: URL, baseDir: URL) -> String? {
+        let basePath = baseDir.standardizedFileURL.path
+        let prefix = basePath.hasSuffix("/") ? basePath : basePath + "/"
+        let resolvedPath = resolvedURL.standardizedFileURL.path
+        guard resolvedPath.hasPrefix(prefix) else { return nil }
+        let rel = String(resolvedPath.dropFirst(prefix.count))
+        return rel.isEmpty ? nil : rel
     }
 
     static let allowedSchemes: Set<String> = ["http", "https", "mailto"]
@@ -640,12 +657,14 @@ struct MarkdownWebView: NSViewRepresentable {
             if navigationAction.navigationType == .linkActivated,
                let url = navigationAction.request.url {
                 switch MarkdownWebView.classifyLink(url: url, fileURL: fileURL) {
-                case .openMarkdownTab(_):
-                    // Resolve path via directory listings (trusted source) to avoid
-                    // user-controlled data flowing into filesystem operations.
+                case .openMarkdownTab(let resolvedURL):
+                    // classifyLink already validated the URL; re-verify via directory
+                    // listings so no user-controlled string reaches filesystem ops.
                     if let baseDir = fileURL?.deletingLastPathComponent(),
+                       let relPath = MarkdownWebView.relativePathInDirectory(
+                           resolvedURL: resolvedURL, baseDir: baseDir),
                        let safeURL = MarkdownWebView.resolveInDirectory(
-                           relativePath: url.relativePath, baseDir: baseDir) {
+                           relativePath: relPath, baseDir: baseDir) {
                         let sourceWindow = webView.window
                         let existingWindows = Set(NSApp.windows)
                         NSDocumentController.shared.openDocument(
