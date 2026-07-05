@@ -560,3 +560,207 @@ struct ResolveInDirectoryTests {
         #expect(result == nil)
     }
 }
+
+// MARK: - extractLocalPaths
+
+@Suite("Link Navigation - extractLocalPaths")
+struct ExtractLocalPathsTests {
+
+    @Test func extractsImagePath() {
+        let md = "![diagram](../diagrams/arch.svg)"
+        let paths = MarkdownWebView.extractLocalPaths(from: md)
+        #expect(paths == ["../diagrams/arch.svg"])
+    }
+
+    @Test func extractsLinkPath() {
+        let md = "[see docs](other.md)"
+        let paths = MarkdownWebView.extractLocalPaths(from: md)
+        #expect(paths == ["other.md"])
+    }
+
+    @Test func extractsBothImagesAndLinks() {
+        let md = """
+        ![img](images/photo.png)
+        Some text [link](../docs/readme.md) more text
+        ![another](sub/diagram.svg)
+        """
+        let paths = MarkdownWebView.extractLocalPaths(from: md)
+        #expect(paths == ["images/photo.png", "../docs/readme.md", "sub/diagram.svg"])
+    }
+
+    @Test func ignoresHTTPLinks() {
+        let md = "[example](https://example.com)"
+        let paths = MarkdownWebView.extractLocalPaths(from: md)
+        #expect(paths.isEmpty)
+    }
+
+    @Test func ignoresMailtoLinks() {
+        let md = "[email](mailto:user@example.com)"
+        let paths = MarkdownWebView.extractLocalPaths(from: md)
+        #expect(paths.isEmpty)
+    }
+
+    @Test func ignoresAnchorLinks() {
+        let md = "[section](#overview)"
+        let paths = MarkdownWebView.extractLocalPaths(from: md)
+        #expect(paths.isEmpty)
+    }
+
+    @Test func ignoresDataURIs() {
+        let md = "![icon](data:image/png;base64,abc)"
+        let paths = MarkdownWebView.extractLocalPaths(from: md)
+        #expect(paths.isEmpty)
+    }
+
+    @Test func handlesImageWithTitle() {
+        let md = """
+        ![alt](image.png "my title")
+        """
+        let paths = MarkdownWebView.extractLocalPaths(from: md)
+        #expect(paths == ["image.png"])
+    }
+
+    @Test func returnsEmptyForNoLinks() {
+        let md = "Just plain text with no links at all."
+        let paths = MarkdownWebView.extractLocalPaths(from: md)
+        #expect(paths.isEmpty)
+    }
+}
+
+// MARK: - commonAncestorDirectory
+
+@Suite("Link Navigation - commonAncestorDirectory")
+struct CommonAncestorDirectoryTests {
+
+    @Test func sameDirectoryReturnsSelf() {
+        let dir = URL(fileURLWithPath: "/Users/test/docs", isDirectory: true)
+        let result = MarkdownWebView.commonAncestorDirectory(of: [dir, dir])
+        #expect(result?.path == dir.path)
+    }
+
+    @Test func siblingDirectoriesReturnParent() {
+        let a = URL(fileURLWithPath: "/Users/test/docs/dev", isDirectory: true)
+        let b = URL(fileURLWithPath: "/Users/test/docs/diagrams", isDirectory: true)
+        let result = MarkdownWebView.commonAncestorDirectory(of: [a, b])
+        #expect(result?.path == "/Users/test/docs")
+    }
+
+    @Test func nestedDirectoryReturnsParent() {
+        let parent = URL(fileURLWithPath: "/Users/test/docs", isDirectory: true)
+        let child = URL(fileURLWithPath: "/Users/test/docs/sub/deep", isDirectory: true)
+        let result = MarkdownWebView.commonAncestorDirectory(of: [parent, child])
+        #expect(result?.path == "/Users/test/docs")
+    }
+
+    @Test func distantDirectoriesReturnRoot() {
+        let a = URL(fileURLWithPath: "/Users/alice/project", isDirectory: true)
+        let b = URL(fileURLWithPath: "/var/log", isDirectory: true)
+        let result = MarkdownWebView.commonAncestorDirectory(of: [a, b])
+        #expect(result?.path == "/")
+    }
+
+    @Test func singleURLReturnsSelf() {
+        let dir = URL(fileURLWithPath: "/Users/test/docs", isDirectory: true)
+        let result = MarkdownWebView.commonAncestorDirectory(of: [dir])
+        #expect(result?.path == dir.path)
+    }
+
+    @Test func emptyArrayReturnsNil() {
+        let result = MarkdownWebView.commonAncestorDirectory(of: [])
+        #expect(result == nil)
+    }
+
+    @Test func threeDirectories() {
+        let a = URL(fileURLWithPath: "/project/docs/dev", isDirectory: true)
+        let b = URL(fileURLWithPath: "/project/docs/diagrams", isDirectory: true)
+        let c = URL(fileURLWithPath: "/project/src", isDirectory: true)
+        let result = MarkdownWebView.commonAncestorDirectory(of: [a, b, c])
+        #expect(result?.path == "/project")
+    }
+}
+
+// MARK: - accessScope
+
+@Suite("Link Navigation - accessScope")
+struct AccessScopeTests {
+
+    @Test func noFileURLReturnsNil() {
+        let result = MarkdownWebView.accessScope(markdown: "![img](a.png)", fileURL: nil)
+        #expect(result == nil)
+    }
+
+    @Test func noLocalPathsReturnsFileDirectory() {
+        let fileURL = URL(fileURLWithPath: "/Users/test/docs/report.md")
+        let md = "Just text, no links."
+        let result = MarkdownWebView.accessScope(markdown: md, fileURL: fileURL)
+        #expect(result?.path == "/Users/test/docs")
+    }
+
+    @Test func sameDirectoryImageReturnsFileDirectory() {
+        let fileURL = URL(fileURLWithPath: "/Users/test/docs/report.md")
+        let md = "![img](photo.png)"
+        let result = MarkdownWebView.accessScope(markdown: md, fileURL: fileURL)
+        #expect(result?.path == "/Users/test/docs")
+    }
+
+    @Test func parentDirectoryImageWidensScope() {
+        let fileURL = URL(fileURLWithPath: "/Users/test/docs/dev/report.md")
+        let md = "![img](../diagrams/arch.svg)"
+        let result = MarkdownWebView.accessScope(markdown: md, fileURL: fileURL)
+        #expect(result?.path == "/Users/test/docs")
+    }
+
+    @Test func multipleParentReferencesWidenToCommonAncestor() {
+        let fileURL = URL(fileURLWithPath: "/project/docs/dev/report.md")
+        let md = """
+        ![a](../diagrams/a.svg)
+        [b](../../src/main.md)
+        """
+        let result = MarkdownWebView.accessScope(markdown: md, fileURL: fileURL)
+        #expect(result?.path == "/project")
+    }
+
+    @Test func httpLinksDoNotAffectScope() {
+        let fileURL = URL(fileURLWithPath: "/Users/test/docs/report.md")
+        let md = "[link](https://example.com) ![img](photo.png)"
+        let result = MarkdownWebView.accessScope(markdown: md, fileURL: fileURL)
+        #expect(result?.path == "/Users/test/docs")
+    }
+}
+
+// MARK: - classifyLink with accessScope
+
+@Suite("Link Navigation - classifyLink with accessScope")
+struct ClassifyLinkWithAccessScopeTests {
+
+    @Test func siblingDirectoryAllowedWithWiderScope() {
+        let fileURL = URL(fileURLWithPath: "/Users/test/docs/dev/report.md")
+        let targetURL = URL(fileURLWithPath: "/Users/test/docs/other/notes.md")
+        let scope = URL(fileURLWithPath: "/Users/test/docs", isDirectory: true)
+        let result = MarkdownWebView.classifyLink(url: targetURL, fileURL: fileURL, accessScope: scope)
+        #expect(result == .openMarkdownTab(targetURL.standardizedFileURL))
+    }
+
+    @Test func outsideScopeStillBlocked() {
+        let fileURL = URL(fileURLWithPath: "/Users/test/docs/dev/report.md")
+        let targetURL = URL(fileURLWithPath: "/Users/test/secret.md")
+        let scope = URL(fileURLWithPath: "/Users/test/docs", isDirectory: true)
+        let result = MarkdownWebView.classifyLink(url: targetURL, fileURL: fileURL, accessScope: scope)
+        #expect(result == .cancel)
+    }
+
+    @Test func defaultScopeFallsBackToFileDirectory() {
+        let fileURL = URL(fileURLWithPath: "/Users/test/docs/report.md")
+        let targetURL = URL(fileURLWithPath: "/Users/test/secret.md")
+        let result = MarkdownWebView.classifyLink(url: targetURL, fileURL: fileURL)
+        #expect(result == .cancel)
+    }
+
+    @Test func sameDirectoryStillWorksWithScope() {
+        let fileURL = URL(fileURLWithPath: "/Users/test/docs/report.md")
+        let targetURL = URL(fileURLWithPath: "/Users/test/docs/other.md")
+        let scope = URL(fileURLWithPath: "/Users/test", isDirectory: true)
+        let result = MarkdownWebView.classifyLink(url: targetURL, fileURL: fileURL, accessScope: scope)
+        #expect(result == .openMarkdownTab(targetURL.standardizedFileURL))
+    }
+}
