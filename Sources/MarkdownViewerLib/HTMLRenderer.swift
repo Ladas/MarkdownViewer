@@ -69,6 +69,18 @@ public enum HTMLRenderer {
             .replacingOccurrences(of: "{{MARKDOWN_CONTENT}}", with: escaped)
     }
 
+    public static func wrapForRendering(_ text: String, fileExtension: String?) -> String {
+        guard let ext = fileExtension?.lowercased() else { return text }
+        switch ext {
+        case "json":
+            return "```json\n\(text)\n```"
+        case "yaml", "yml":
+            return "```yaml\n\(text)\n```"
+        default:
+            return text
+        }
+    }
+
     static func escapeForJSTemplateLiteral(_ string: String) -> String {
         string
             .replacingOccurrences(of: "\\", with: "\\\\")

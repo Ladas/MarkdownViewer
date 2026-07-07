@@ -46,6 +46,39 @@
             <key>LSHandlerRank</key>
             <string>Owner</string>
         </dict>
+        <dict>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>json</string>
+            </array>
+            <key>CFBundleTypeName</key>
+            <string>JSON Document</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.json</string>
+            </array>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>yaml</string>
+                <string>yml</string>
+            </array>
+            <key>CFBundleTypeName</key>
+            <string>YAML Document</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.yaml</string>
+            </array>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+        </dict>
     </array>
     <key>UTImportedTypeDeclarations</key>
     <array>
