@@ -237,6 +237,10 @@ public struct ContentView: View {
         return "\(total)/\(resolved)"
     }
 
+    private var markdownForRendering: String {
+        HTMLRenderer.wrapForRendering(currentText, fileExtension: fileURL?.pathExtension)
+    }
+
     private var effectiveOverrideHTML: String? {
         if showDiff { return diffHTML }
         switch viewMode {
@@ -264,7 +268,7 @@ public struct ContentView: View {
                     Divider()
                 }
                 MarkdownWebView(
-                    markdown: currentText,
+                    markdown: markdownForRendering,
                     fileURL: fileURL,
                     overrideHTML: effectiveOverrideHTML,
                     searchText: showSearch ? searchText : "",
