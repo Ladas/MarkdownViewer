@@ -8,6 +8,7 @@ MARKED_VERSION = 15.0.8
 MERMAID_VERSION = 11.13.0
 DOMPURIFY_VERSION = 3.2.4
 GH_MARKDOWN_CSS_VERSION = 5.8.1
+HLJS_VERSION = 11.11.1
 FA_VERSION = 6.7.2
 
 deps:
@@ -20,6 +21,10 @@ deps:
 	@curl -sL "https://cdn.jsdelivr.net/npm/dompurify@$(DOMPURIFY_VERSION)/dist/purify.min.js" -o $(VENDOR_DIR)/purify.min.js
 	@echo "Downloading github-markdown-css@$(GH_MARKDOWN_CSS_VERSION)..."
 	@curl -sL "https://cdn.jsdelivr.net/npm/github-markdown-css@$(GH_MARKDOWN_CSS_VERSION)/github-markdown.css" -o $(VENDOR_DIR)/github-markdown.css
+	@echo "Downloading highlight.js@$(HLJS_VERSION)..."
+	@curl -sL "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@$(HLJS_VERSION)/build/highlight.min.js" -o $(VENDOR_DIR)/highlight.min.js
+	@curl -sL "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@$(HLJS_VERSION)/build/styles/github.min.css" -o $(VENDOR_DIR)/hljs-github.min.css
+	@curl -sL "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@$(HLJS_VERSION)/build/styles/github-dark.min.css" -o $(VENDOR_DIR)/hljs-github-dark.min.css
 	@echo "Downloading Font Awesome@$(FA_VERSION)..."
 	@curl -sL "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/$(FA_VERSION)/css/all.min.css" -o $(VENDOR_DIR)/fontawesome-raw.css
 	@curl -sL "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/$(FA_VERSION)/webfonts/fa-solid-900.woff2" -o $(VENDOR_DIR)/fa-solid-900.woff2

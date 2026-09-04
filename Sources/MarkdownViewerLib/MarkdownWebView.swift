@@ -5,8 +5,8 @@ import UniformTypeIdentifiers
 
 struct MarkdownWebView: NSViewRepresentable {
     let markdown: String
+    var fileURL: URL?
     var overrideHTML: String?
-    var baseURL: URL?
     var searchText: String = ""
     var navigationTrigger: Int = 0
     var navigationForward: Bool = true
@@ -49,10 +49,14 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.allowsMagnification = true
         context.coordinator.lastMarkdown = markdown
         context.coordinator.lastOverrideHTML = overrideHTML
+        context.coordinator.fileURL = fileURL
+        let scope = MarkdownWebView.accessScope(markdown: markdown, fileURL: fileURL)
+        context.coordinator.accessScope = scope
 
+        let baseURL = fileURL?.deletingLastPathComponent()
         var html = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
         html = injectTheme(html)
-        loadHTML(html, in: webView, baseURL: baseURL)
+        loadHTML(html, in: webView, baseURL: baseURL, accessScope: scope)
         return webView
     }
 
@@ -67,7 +71,11 @@ struct MarkdownWebView: NSViewRepresentable {
         coord.onExplainWithClaude = onExplainWithClaude
         coord.onAskClaude = onAskClaude
 
-        // Check if a full page reload is needed
+        coord.fileURL = fileURL
+        let baseURL = fileURL?.deletingLastPathComponent()
+        let scope = MarkdownWebView.accessScope(markdown: markdown, fileURL: fileURL)
+        coord.accessScope = scope
+
         let contentChanged = coord.lastMarkdown != markdown || coord.lastOverrideHTML != overrideHTML
         let themeChanged = coord.lastThemeVersion != themeVersion
         let appearanceChanged = coord.lastAppearanceMode != appearanceMode
@@ -89,7 +97,7 @@ struct MarkdownWebView: NSViewRepresentable {
             htmlToLoad = injectTheme(htmlToLoad)
             webView.evaluateJavaScript("window.scrollY") { result, _ in
                 coord.savedScrollY = result as? Double ?? 0
-                loadHTML(htmlToLoad, in: webView, baseURL: baseURL)
+                loadHTML(htmlToLoad, in: webView, baseURL: baseURL, accessScope: scope)
             }
             return
         }
@@ -151,22 +159,19 @@ struct MarkdownWebView: NSViewRepresentable {
         }
     }
 
-    // Helper to load HTML with proper file access for local images
-    private func loadHTML(_ html: String, in webView: WKWebView, baseURL: URL?) {
+    private func loadHTML(_ html: String, in webView: WKWebView, baseURL: URL?, accessScope: URL?) {
         guard let baseURL = baseURL else {
             webView.loadHTMLString(html, baseURL: nil)
             return
         }
 
-        // Write HTML to a temporary file in the same directory to grant read access
-        let tempURL = baseURL.deletingLastPathComponent().appendingPathComponent(".markdown-viewer-temp.html")
+        let scope = accessScope ?? baseURL
+        let tempURL = MarkdownWebView.tempFileURL(inDirectory: baseURL)
         do {
             try html.write(to: tempURL, atomically: true, encoding: .utf8)
-            // loadFileURL grants read access to the entire directory
-            webView.loadFileURL(tempURL, allowingReadAccessTo: baseURL.deletingLastPathComponent())
+            webView.loadFileURL(tempURL, allowingReadAccessTo: scope)
         } catch {
-            // Fallback to loadHTMLString if file write fails
-            webView.loadHTMLString(html, baseURL: baseURL.deletingLastPathComponent())
+            webView.loadHTMLString(html, baseURL: baseURL)
         }
     }
 
@@ -198,9 +203,143 @@ struct MarkdownWebView: NSViewRepresentable {
         Coordinator()
     }
 
-    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
-        private static let allowedSchemes: Set<String> = ["http", "https", "mailto"]
+    enum LinkAction: Equatable {
+        case openMarkdownTab(URL)
+        case openExternal(URL)
+        case cancel
+    }
 
+    static func classifyLink(url: URL, fileURL: URL?, accessScope: URL? = nil) -> LinkAction {
+        let scheme = url.scheme?.lowercased() ?? ""
+
+        if scheme == "file" || scheme.isEmpty {
+            let raw: URL
+            if scheme == "file" {
+                raw = url
+            } else if let base = fileURL?.deletingLastPathComponent() {
+                raw = base.appendingPathComponent(url.path)
+            } else {
+                return .cancel
+            }
+            let resolved = raw.standardizedFileURL
+            let scopeDir = (accessScope ?? fileURL?.deletingLastPathComponent())?.standardizedFileURL
+            if let scopePath = scopeDir?.path {
+                let prefix = scopePath.hasSuffix("/") ? scopePath : scopePath + "/"
+                guard resolved.path.hasPrefix(prefix) || resolved.path == scopePath else {
+                    return .cancel
+                }
+            }
+            let ext = resolved.pathExtension.lowercased()
+            if markdownExtensions.contains(ext) {
+                return .openMarkdownTab(resolved)
+            }
+            return .cancel
+        } else if allowedSchemes.contains(scheme) {
+            return .openExternal(url)
+        }
+        return .cancel
+    }
+
+    /// Resolve a relative path within baseDir using directory listings as the
+    /// trusted source, so that user-provided path components never flow into
+    /// filesystem operations. Returns nil if any component is missing or
+    /// contains traversal sequences.
+    static func resolveInDirectory(relativePath: String, baseDir: URL) -> URL? {
+        let parts = relativePath.components(separatedBy: "/").filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return nil }
+        guard parts.allSatisfy({ $0 != ".." && $0 != "." }) else { return nil }
+
+        var current = baseDir
+        for (i, requested) in parts.enumerated() {
+            guard let entries = try? FileManager.default.contentsOfDirectory(atPath: current.path),
+                  let matched = entries.first(where: { $0 == requested }) else {
+                return nil
+            }
+            current = current.appendingPathComponent(matched)
+            if i < parts.count - 1 {
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: current.path, isDirectory: &isDir),
+                      isDir.boolValue else { return nil }
+            }
+        }
+        return current
+    }
+
+    /// Returns the URL of the temporary HTML file used to load content for a given
+    /// directory. The temp file must live in the same directory as the markdown file
+    /// so WKWebView resolves relative links against that directory.
+    static func tempFileURL(inDirectory baseDir: URL) -> URL {
+        baseDir.appendingPathComponent(".markdown-viewer-temp.html")
+    }
+
+    /// Returns the path of resolvedURL relative to baseDir, or nil if resolvedURL
+    /// is not strictly inside baseDir (i.e. not a descendant).
+    static func relativePathInDirectory(resolvedURL: URL, baseDir: URL) -> String? {
+        let basePath = baseDir.standardizedFileURL.path
+        let prefix = basePath.hasSuffix("/") ? basePath : basePath + "/"
+        let resolvedPath = resolvedURL.standardizedFileURL.path
+        guard resolvedPath.hasPrefix(prefix) else { return nil }
+        let rel = String(resolvedPath.dropFirst(prefix.count))
+        return rel.isEmpty ? nil : rel
+    }
+
+    static func extractLocalPaths(from markdown: String) -> [String] {
+        let pattern = #"!?\[(?:[^\]\\]|\\.)*\]\(([^)\s]+)(?:\s+"[^"]*")?\)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let nsString = markdown as NSString
+        let matches = regex.matches(in: markdown, range: NSRange(location: 0, length: nsString.length))
+        return matches.compactMap { match -> String? in
+            guard match.numberOfRanges > 1 else { return nil }
+            let path = nsString.substring(with: match.range(at: 1))
+            if path.hasPrefix("#") { return nil }
+            if path.contains("://") { return nil }
+            if path.hasPrefix("data:") { return nil }
+            if path.hasPrefix("mailto:") { return nil }
+            return path
+        }
+    }
+
+    static func commonAncestorDirectory(of urls: [URL]) -> URL? {
+        guard let first = urls.first else { return nil }
+        var commonComponents = first.standardizedFileURL.pathComponents
+        for url in urls.dropFirst() {
+            let components = url.standardizedFileURL.pathComponents
+            let minLen = min(commonComponents.count, components.count)
+            var matchLen = 0
+            while matchLen < minLen && commonComponents[matchLen] == components[matchLen] {
+                matchLen += 1
+            }
+            commonComponents = Array(commonComponents.prefix(matchLen))
+        }
+        guard !commonComponents.isEmpty else { return nil }
+        var result = URL(fileURLWithPath: commonComponents[0], isDirectory: true)
+        for component in commonComponents.dropFirst() {
+            result = result.appendingPathComponent(component, isDirectory: true)
+        }
+        return result
+    }
+
+    static func accessScope(markdown: String, fileURL: URL?) -> URL? {
+        guard let fileURL = fileURL else { return nil }
+        let fileDir = fileURL.deletingLastPathComponent()
+        let localPaths = extractLocalPaths(from: markdown)
+        if localPaths.isEmpty { return fileDir }
+
+        var dirs: [URL] = [fileDir]
+        for path in localPaths {
+            let resolved = URL(fileURLWithPath: path, relativeTo: fileDir).standardizedFileURL
+            dirs.append(resolved.deletingLastPathComponent())
+        }
+        return commonAncestorDirectory(of: dirs) ?? fileDir
+    }
+
+    static let allowedSchemes: Set<String> = ["http", "https", "mailto"]
+    static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn"]
+
+    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+
+        var fileURL: URL?
+        var accessScope: URL?
         var lastMarkdown: String?
         var lastOverrideHTML: String?
         var lastThemeVersion: Int = 0
@@ -351,7 +490,7 @@ struct MarkdownWebView: NSViewRepresentable {
                   let y = params["y"] as? Double,
                   let width = params["width"] as? Double,
                   let height = params["height"] as? Double,
-                  let duration = params["duration"] as? Double,
+                  let _ = params["duration"] as? Double,
                   let frameCount = params["frames"] as? Int else { return }
 
             let rect = CGRect(x: x, y: y, width: width, height: height)
@@ -421,12 +560,63 @@ struct MarkdownWebView: NSViewRepresentable {
         }
 
         private func handleCopyGoogleDocs(_ message: WKScriptMessage) {
-            guard let html = message.body as? String else { return }
+            guard let html = message.body as? String,
+                  let webView = message.webView else { return }
+            // Convert local image paths to data URIs so they survive clipboard paste
+            let baseURL = webView.url?.deletingLastPathComponent()
+            let processed = Self.inlineLocalImages(html, baseURL: baseURL)
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             // Only .html — Google Docs reads this as rich content fragment
-            pasteboard.setString(html, forType: .html)
+            pasteboard.setString(processed, forType: .html)
             onCopyDone?()
+        }
+
+        private static func inlineLocalImages(_ html: String, baseURL: URL?) -> String {
+            guard let baseURL = baseURL else { return html }
+
+            // Build an index of actual image files in the document's directory (no user input in paths)
+            let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "svg", "webp"]
+            var fileIndex: [String: URL] = [:]
+            if let enumerator = FileManager.default.enumerator(
+                at: baseURL, includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) {
+                for case let fileURL as URL in enumerator {
+                    if imageExtensions.contains(fileURL.pathExtension.lowercased()) {
+                        let relativePath = fileURL.standardized.path
+                            .dropFirst(baseURL.standardized.path.count)
+                            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                        fileIndex[relativePath] = fileURL
+                    }
+                }
+            }
+
+            var result = html
+            let pattern = try! NSRegularExpression(pattern: #"<img\s[^>]*src="([^"]+)"[^>]*>"#, options: [])
+            let matches = pattern.matches(in: html, range: NSRange(html.startIndex..., in: html))
+            for match in matches.reversed() {
+                guard let srcRange = Range(match.range(at: 1), in: html) else { continue }
+                let src = String(html[srcRange])
+                if src.hasPrefix("data:") || src.hasPrefix("http") { continue }
+
+                // Look up src in the pre-built index of known image files
+                let lookupKey = src.removingPercentEncoding ?? src
+                guard let safeURL = fileIndex[lookupKey] else { continue }
+
+                // Read from the index-derived path (not from user input)
+                guard let data = try? Data(contentsOf: safeURL) else { continue }
+
+                // Convert all images to PNG — Google Docs doesn't render SVG data URIs
+                guard let image = NSImage(data: data),
+                      let tiff = image.tiffRepresentation,
+                      let bitmap = NSBitmapImageRep(data: tiff),
+                      let pngData = bitmap.representation(using: .png, properties: [:]) else { continue }
+
+                let dataURI = "data:image/png;base64,\(pngData.base64EncodedString())"
+                result = result.replacingCharacters(in: Range(match.range(at: 1), in: result)!, with: dataURI)
+            }
+            return result
         }
 
         private func handleExportHTML(_ message: WKScriptMessage) {
@@ -521,18 +711,38 @@ struct MarkdownWebView: NSViewRepresentable {
                 }
             }
 
-            // Handle link activations (external links)
             if navigationAction.navigationType == .linkActivated,
                let url = navigationAction.request.url {
-                // Open external links in default browser
-                if let scheme = url.scheme?.lowercased(),
-                   Self.allowedSchemes.contains(scheme) {
-                    NSWorkspace.shared.open(url)
+                let scope = accessScope
+                switch MarkdownWebView.classifyLink(url: url, fileURL: fileURL, accessScope: scope) {
+                case .openMarkdownTab(let resolvedURL):
+                    if let scopeDir = scope ?? fileURL?.deletingLastPathComponent(),
+                       let relPath = MarkdownWebView.relativePathInDirectory(
+                           resolvedURL: resolvedURL, baseDir: scopeDir),
+                       let safeURL = MarkdownWebView.resolveInDirectory(
+                           relativePath: relPath, baseDir: scopeDir) {
+                        let sourceWindow = webView.window
+                        let existingWindows = Set(NSApp.windows)
+                        NSDocumentController.shared.openDocument(
+                            withContentsOf: safeURL, display: true
+                        ) { _, _, _ in
+                            guard let sourceWindow = sourceWindow else { return }
+                            if let newWindow = NSApp.windows.first(where: {
+                                !existingWindows.contains($0) && $0 !== sourceWindow
+                            }) {
+                                sourceWindow.addTabbedWindow(newWindow, ordered: .above)
+                                newWindow.makeKeyAndOrderFront(nil)
+                            }
+                        }
+                    }
+                case .openExternal(let externalURL):
+                    NSWorkspace.shared.open(externalURL)
+                case .cancel:
+                    break
                 }
                 decisionHandler(.cancel)
                 return
             }
-
             decisionHandler(.allow)
         }
     }

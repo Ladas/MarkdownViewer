@@ -15,6 +15,11 @@ Native macOS Markdown viewer with Mermaid diagram support. SwiftUI app using WKW
 | `make install` | Build + install to `/Applications` |
 | `make clean` | Remove build artifacts |
 
+**Quitting the app before reinstall:** Never use `pkill` — it kills the process without saving state (recent documents list is lost). Always quit gracefully:
+```bash
+osascript -e 'quit app "MarkdownViewer"'
+```
+
 If only CommandLineTools are installed (no Xcode), tests need:
 ```bash
 DEVELOPER_DIR=/path/to/Xcode.app/Contents/Developer swift test
