@@ -49,6 +49,7 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.allowsMagnification = true
         context.coordinator.lastMarkdown = markdown
         context.coordinator.lastOverrideHTML = overrideHTML
+        context.coordinator.lastContentWidth = contentWidth
         context.coordinator.fileURL = fileURL
         let scope = MarkdownWebView.accessScope(markdown: markdown, fileURL: fileURL)
         context.coordinator.accessScope = scope
@@ -674,6 +675,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             pageLoaded = true
+            webView.evaluateJavaScript("if (typeof setContentWidth === 'function') { setContentWidth(\(Int(lastContentWidth))); }") { _, _ in }
             if savedScrollY > 0 {
                 let y = savedScrollY
                 savedScrollY = 0
