@@ -49,12 +49,15 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.allowsMagnification = true
         context.coordinator.lastMarkdown = markdown
         context.coordinator.lastOverrideHTML = overrideHTML
+        context.coordinator.lastContentWidth = contentWidth
         context.coordinator.fileURL = fileURL
+        let scope = MarkdownWebView.accessScope(markdown: markdown, fileURL: fileURL)
+        context.coordinator.accessScope = scope
 
         let baseURL = fileURL?.deletingLastPathComponent()
         var html = overrideHTML ?? HTMLRenderer.render(markdown: markdown)
         html = injectTheme(html)
-        loadHTML(html, in: webView, baseURL: baseURL)
+        loadHTML(html, in: webView, baseURL: baseURL, accessScope: scope)
         return webView
     }
 
@@ -71,6 +74,8 @@ struct MarkdownWebView: NSViewRepresentable {
 
         coord.fileURL = fileURL
         let baseURL = fileURL?.deletingLastPathComponent()
+        let scope = MarkdownWebView.accessScope(markdown: markdown, fileURL: fileURL)
+        coord.accessScope = scope
 
         let contentChanged = coord.lastMarkdown != markdown || coord.lastOverrideHTML != overrideHTML
         let themeChanged = coord.lastThemeVersion != themeVersion
@@ -93,7 +98,7 @@ struct MarkdownWebView: NSViewRepresentable {
             htmlToLoad = injectTheme(htmlToLoad)
             webView.evaluateJavaScript("window.scrollY") { result, _ in
                 coord.savedScrollY = result as? Double ?? 0
-                loadHTML(htmlToLoad, in: webView, baseURL: baseURL)
+                loadHTML(htmlToLoad, in: webView, baseURL: baseURL, accessScope: scope)
             }
             return
         }
@@ -155,22 +160,19 @@ struct MarkdownWebView: NSViewRepresentable {
         }
     }
 
-    // Helper to load HTML with proper file access for local images
-    private func loadHTML(_ html: String, in webView: WKWebView, baseURL: URL?) {
+    private func loadHTML(_ html: String, in webView: WKWebView, baseURL: URL?, accessScope: URL?) {
         guard let baseURL = baseURL else {
             webView.loadHTMLString(html, baseURL: nil)
             return
         }
 
-        // Write HTML to a temporary file in the same directory to grant read access
-        let tempURL = baseURL.deletingLastPathComponent().appendingPathComponent(".markdown-viewer-temp.html")
+        let scope = accessScope ?? baseURL
+        let tempURL = MarkdownWebView.tempFileURL(inDirectory: baseURL)
         do {
             try html.write(to: tempURL, atomically: true, encoding: .utf8)
-            // loadFileURL grants read access to the entire directory
-            webView.loadFileURL(tempURL, allowingReadAccessTo: baseURL.deletingLastPathComponent())
+            webView.loadFileURL(tempURL, allowingReadAccessTo: scope)
         } catch {
-            // Fallback to loadHTMLString if file write fails
-            webView.loadHTMLString(html, baseURL: baseURL.deletingLastPathComponent())
+            webView.loadHTMLString(html, baseURL: baseURL)
         }
     }
 
@@ -208,7 +210,7 @@ struct MarkdownWebView: NSViewRepresentable {
         case cancel
     }
 
-    static func classifyLink(url: URL, fileURL: URL?) -> LinkAction {
+    static func classifyLink(url: URL, fileURL: URL?, accessScope: URL? = nil) -> LinkAction {
         let scheme = url.scheme?.lowercased() ?? ""
 
         if scheme == "file" || scheme.isEmpty {
@@ -221,8 +223,12 @@ struct MarkdownWebView: NSViewRepresentable {
                 return .cancel
             }
             let resolved = raw.standardizedFileURL
-            if let base = fileURL?.deletingLastPathComponent().standardizedFileURL {
-                guard resolved.path.hasPrefix(base.path) else { return .cancel }
+            let scopeDir = (accessScope ?? fileURL?.deletingLastPathComponent())?.standardizedFileURL
+            if let scopePath = scopeDir?.path {
+                let prefix = scopePath.hasSuffix("/") ? scopePath : scopePath + "/"
+                guard resolved.path.hasPrefix(prefix) || resolved.path == scopePath else {
+                    return .cancel
+                }
             }
             let ext = resolved.pathExtension.lowercased()
             if markdownExtensions.contains(ext) {
@@ -260,12 +266,81 @@ struct MarkdownWebView: NSViewRepresentable {
         return current
     }
 
+    /// Returns the URL of the temporary HTML file used to load content for a given
+    /// directory. The temp file must live in the same directory as the markdown file
+    /// so WKWebView resolves relative links against that directory.
+    static func tempFileURL(inDirectory baseDir: URL) -> URL {
+        baseDir.appendingPathComponent(".markdown-viewer-temp.html")
+    }
+
+    /// Returns the path of resolvedURL relative to baseDir, or nil if resolvedURL
+    /// is not strictly inside baseDir (i.e. not a descendant).
+    static func relativePathInDirectory(resolvedURL: URL, baseDir: URL) -> String? {
+        let basePath = baseDir.standardizedFileURL.path
+        let prefix = basePath.hasSuffix("/") ? basePath : basePath + "/"
+        let resolvedPath = resolvedURL.standardizedFileURL.path
+        guard resolvedPath.hasPrefix(prefix) else { return nil }
+        let rel = String(resolvedPath.dropFirst(prefix.count))
+        return rel.isEmpty ? nil : rel
+    }
+
+    static func extractLocalPaths(from markdown: String) -> [String] {
+        let pattern = #"!?\[(?:[^\]\\]|\\.)*\]\(([^)\s]+)(?:\s+"[^"]*")?\)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let nsString = markdown as NSString
+        let matches = regex.matches(in: markdown, range: NSRange(location: 0, length: nsString.length))
+        return matches.compactMap { match -> String? in
+            guard match.numberOfRanges > 1 else { return nil }
+            let path = nsString.substring(with: match.range(at: 1))
+            if path.hasPrefix("#") { return nil }
+            if path.contains("://") { return nil }
+            if path.hasPrefix("data:") { return nil }
+            if path.hasPrefix("mailto:") { return nil }
+            return path
+        }
+    }
+
+    static func commonAncestorDirectory(of urls: [URL]) -> URL? {
+        guard let first = urls.first else { return nil }
+        var commonComponents = first.standardizedFileURL.pathComponents
+        for url in urls.dropFirst() {
+            let components = url.standardizedFileURL.pathComponents
+            let minLen = min(commonComponents.count, components.count)
+            var matchLen = 0
+            while matchLen < minLen && commonComponents[matchLen] == components[matchLen] {
+                matchLen += 1
+            }
+            commonComponents = Array(commonComponents.prefix(matchLen))
+        }
+        guard !commonComponents.isEmpty else { return nil }
+        var result = URL(fileURLWithPath: commonComponents[0], isDirectory: true)
+        for component in commonComponents.dropFirst() {
+            result = result.appendingPathComponent(component, isDirectory: true)
+        }
+        return result
+    }
+
+    static func accessScope(markdown: String, fileURL: URL?) -> URL? {
+        guard let fileURL = fileURL else { return nil }
+        let fileDir = fileURL.deletingLastPathComponent()
+        let localPaths = extractLocalPaths(from: markdown)
+        if localPaths.isEmpty { return fileDir }
+
+        var dirs: [URL] = [fileDir]
+        for path in localPaths {
+            let resolved = URL(fileURLWithPath: path, relativeTo: fileDir).standardizedFileURL
+            dirs.append(resolved.deletingLastPathComponent())
+        }
+        return commonAncestorDirectory(of: dirs) ?? fileDir
+    }
+
     static let allowedSchemes: Set<String> = ["http", "https", "mailto"]
     static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn"]
 
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
 
         var fileURL: URL?
+        var accessScope: URL?
         var lastMarkdown: String?
         var lastOverrideHTML: String?
         var lastThemeVersion: Int = 0
@@ -600,6 +675,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             pageLoaded = true
+            webView.evaluateJavaScript("if (typeof setContentWidth === 'function') { setContentWidth(\(Int(lastContentWidth))); }") { _, _ in }
             if savedScrollY > 0 {
                 let y = savedScrollY
                 savedScrollY = 0
@@ -639,13 +715,14 @@ struct MarkdownWebView: NSViewRepresentable {
 
             if navigationAction.navigationType == .linkActivated,
                let url = navigationAction.request.url {
-                switch MarkdownWebView.classifyLink(url: url, fileURL: fileURL) {
-                case .openMarkdownTab(_):
-                    // Resolve path via directory listings (trusted source) to avoid
-                    // user-controlled data flowing into filesystem operations.
-                    if let baseDir = fileURL?.deletingLastPathComponent(),
+                let scope = accessScope
+                switch MarkdownWebView.classifyLink(url: url, fileURL: fileURL, accessScope: scope) {
+                case .openMarkdownTab(let resolvedURL):
+                    if let scopeDir = scope ?? fileURL?.deletingLastPathComponent(),
+                       let relPath = MarkdownWebView.relativePathInDirectory(
+                           resolvedURL: resolvedURL, baseDir: scopeDir),
                        let safeURL = MarkdownWebView.resolveInDirectory(
-                           relativePath: url.relativePath, baseDir: baseDir) {
+                           relativePath: relPath, baseDir: scopeDir) {
                         let sourceWindow = webView.window
                         let existingWindows = Set(NSApp.windows)
                         NSDocumentController.shared.openDocument(

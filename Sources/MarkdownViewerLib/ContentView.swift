@@ -188,7 +188,7 @@ public struct ContentView: View {
     @State private var scrollToHeadingIndex = -1
     @State private var fileWatcher: FileWatcher?
     @State private var appearanceMode = "auto"
-    @State private var contentWidth: Double = 980
+    @AppStorage("contentWidth") private var contentWidth: Double = 980
     @State private var viewMode: ViewMode = .preview
     private static let cachedThemes = MermaidThemeManager.loadThemes()
     @State private var mermaidTheme: MermaidTheme = cachedThemes[0]
@@ -237,6 +237,10 @@ public struct ContentView: View {
         return "\(total)/\(resolved)"
     }
 
+    private var markdownForRendering: String {
+        HTMLRenderer.wrapForRendering(currentText, fileExtension: fileURL?.pathExtension)
+    }
+
     private var effectiveOverrideHTML: String? {
         if showDiff { return diffHTML }
         switch viewMode {
@@ -264,7 +268,7 @@ public struct ContentView: View {
                     Divider()
                 }
                 MarkdownWebView(
-                    markdown: currentText,
+                    markdown: markdownForRendering,
                     fileURL: fileURL,
                     overrideHTML: effectiveOverrideHTML,
                     searchText: showSearch ? searchText : "",
